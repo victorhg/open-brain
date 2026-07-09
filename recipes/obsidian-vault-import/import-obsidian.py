@@ -509,6 +509,7 @@ def content_fingerprint(text: str) -> str:
 # ── Main Pipeline ────────────────────────────────────────────────────────────
 
 def main():
+    global LLM_API_KEY, BASE_LLM_URL, EMBEDDING_MODEL, LLM_MODEL
     # Force unbuffered stdout so progress is visible in background/piped runs
     sys.stdout.reconfigure(line_buffering=True)
 
@@ -550,11 +551,17 @@ def main():
         test_base_url = BASE_LLM_URL
         test_chat_model = LLM_MODEL
         test_emb_model = EMBEDDING_MODEL
+        test_api_key = LLM_API_KEY
 
         print("Testing LLM and Embedding connections...")
         print(f"  Base URL: {test_base_url}")
         print(f"  Chat Model: {test_chat_model}")
         print(f"  Embedding Model: {test_emb_model}")
+        print(f"  API Key Present: {bool(test_api_key)}")
+        
+        if not test_api_key:
+            print("\nFATAL: LLM_API_KEY is not set. Cannot perform authenticated connection tests.", file=sys.stderr)
+            sys.exit(1)
         
         # Test Chat
         try:
