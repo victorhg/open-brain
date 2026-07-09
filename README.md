@@ -22,10 +22,5 @@ Instead of running manual commands, interact with `pi` to manage your brain.
   - `obsidian-vault-import`: Local-first enabled tool for syncing Obsidian vaults.
 - `/skills`: Reusable agent-logic packs (model-agnostic instructions for your orchestrator).
 
-## Getting Started
-1. **Ensure environment connectivity:** Point `pi` to your existing Supabase project.
-2. **Verify the environment:** Run `pi` and give the command: *"Initialize system check."*
-3. **Start adding features:** Begin with `extensions/household-knowledge/`.
-
----
-*Open Brain is the infrastructure layer for your thinking. No middleware, no SaaS chains.*
+## 🧠 Agent Operational Knowledge Base
+For technical deep-dives, configuration validation, and API troubleshooting (especially regarding LLM/API keys), please refer to the detailed operational guidelines located at: `recipes/LLM_Configuration_Insights.md`
