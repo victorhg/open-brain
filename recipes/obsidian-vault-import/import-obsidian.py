@@ -53,11 +53,17 @@ WHOLE_NOTE_THRESHOLD = 500      # notes under this word count → 1 thought
 LLM_CHUNK_THRESHOLD = 1000     # sections over this → LLM distillation
 
 # --- LLM Configuration (Global) ---
-# These variables will be set based on CLI arguments (--use-local-llm)
+# These variables are initialized with default values from environment or hardcoded
+OPENROUTER_BASE_URL_DEFAULT = "https://openrouter.ai/api/v1"
+
+# Declare these as global so they can be accessed/modified
+BASE_LLM_URL = os.environ.get("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL_DEFAULT)
 EMBEDDING_MODEL = os.environ.get("OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small")
 LLM_MODEL = os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
-BASE_LLM_URL = os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
 LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+
+# We need to make sure they are accessible within functions. 
+# They are already at the module level.
 
 # Local LLM Configuration (Used ONLY if --use-local-llm is passed)
 LOCAL_LLM_BASE_URL = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
@@ -351,6 +357,10 @@ def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
             if thoughts and isinstance(thoughts, list):
                 return [t for t in thoughts if isinstance(t, str) and t.strip()]
         except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+            # If we have 'data' (from a request), log it for debugging
+            if 'data' in locals() and isinstance(data, dict):
+                print(f"    LLM response structure error: {data}")
+            
             if attempt < MAX_RETRIES - 1:
                 wait = RETRY_BACKOFF * (2 ** attempt)
                 print(f"    LLM retry in {wait}s: {e}")
@@ -505,7 +515,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Import an Obsidian vault into Open Brain as searchable thoughts."
     )
-    parser.add_argument("vault_path", help="Path to the Obsidian vault root directory")
+    parser.add_argument("vault_path", help="Path to the Obsidian vault root directory", nargs='?')
     parser.add_argument("--dry-run", action="store_true",
                         help="Preview what would be imported without inserting")
     parser.add_argument("--limit", type=int, default=0,
@@ -524,6 +534,8 @@ def main():
                         help="Disable secret detection (not recommended)")
     parser.add_argument("--verbose", action="store_true",
                         help="Show detailed progress")
+    parser.add_argument("--test-llm", action="store_true",
+                        help="Test the configured LLM and Embedding connections and exit")
     parser.add_argument("--report", action="store_true",
                         help="Generate a markdown summary report")
     # Add --use-local-llm flag
@@ -531,6 +543,43 @@ def main():
                         help="Force the use of Local LLM configuration instead of OpenRouter")
 
     args = parser.parse_args()
+
+    # --- Test LLM/Embedding Connection ---
+    if args.test_llm:
+        # Use module-level constants as fallbacks if globals aren't set
+        test_base_url = BASE_LLM_URL
+        test_chat_model = LLM_MODEL
+        test_emb_model = EMBEDDING_MODEL
+
+        print("Testing LLM and Embedding connections...")
+        print(f"  Base URL: {test_base_url}")
+        print(f"  Chat Model: {test_chat_model}")
+        print(f"  Embedding Model: {test_emb_model}")
+        
+        # Test Chat
+        try:
+            print("  Testing Chat Completion...", end=" ")
+            chat_data = _local_request("chat/completions", {
+                "model": LLM_MODEL,
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 5
+            })
+            print("SUCCESS")
+        except Exception as e:
+            print(f"FAILED: {e}")
+            
+        # Test Embedding
+        try:
+            print("  Testing Embeddings...", end=" ")
+            emb_data = _local_request("embeddings", {
+                "model": EMBEDDING_MODEL,
+                "input": "test"
+            })
+            print("SUCCESS")
+        except Exception as e:
+            print(f"FAILED: {e}")
+        
+        sys.exit(0)
 
     vault_root = Path(args.vault_path).expanduser().resolve()
     if not vault_root.is_dir():
@@ -551,7 +600,7 @@ def main():
                 os.environ.setdefault(key.strip(), value)
 
     # Provider Configuration
-    global EMBEDDING_MODEL, LLM_MODEL, BASE_LLM_URL, LLM_API_KEY
+    # We do NOT need a global declaration here as they are accessed from the module scope.
     if args.use_local_llm:
         BASE_LLM_URL = LOCAL_LLM_BASE_URL
         EMBEDDING_MODEL = LOCAL_EMBEDDING_MODEL
