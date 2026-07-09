@@ -8,7 +8,33 @@ always reflect values resolved by the main entry point at startup.
 """
 
 import json
+import re
 import time
+
+
+def _extract_json_text(text: str) -> str:
+    """Return the JSON substring from an LLM response, handling common wrapping patterns.
+
+    Some models (e.g. Gemma) wrap JSON in markdown code fences or embed it inside
+    chain-of-thought prose. This normalises the output before json.loads().
+
+    Strategy (applied in order):
+    1. Strip leading/trailing whitespace.
+    2. Strip ```json...``` or ```...``` code fences.
+    3. If the result still doesn't start with '{', extract the first {...} block via regex.
+    """
+    text = text.strip()
+    # Strip markdown code fences
+    text = re.sub(r'^```(?:json)?\s*\n?', '', text)
+    text = re.sub(r'\n?```\s*$', '', text)
+    text = text.strip()
+    # Fallback: pull the first complete JSON object out of surrounding prose
+    if not text.startswith('{'):
+        match = re.search(r'\{[\s\S]*\}', text)
+        if match:
+            text = match.group()
+    return text
+
 
 try:
     import requests
@@ -103,6 +129,7 @@ def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
                 }, openrouter_key)
 
             text = data["choices"][0]["message"]["content"]
+            text = _extract_json_text(text)
             parsed = json.loads(text)
             thoughts = parsed.get("thoughts", [])
             if thoughts and isinstance(thoughts, list):
