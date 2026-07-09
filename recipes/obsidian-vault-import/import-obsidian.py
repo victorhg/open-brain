@@ -9,6 +9,7 @@ Usage:
   python import-obsidian.py /path/to/vault
   python import-obsidian.py /path/to/vault --dry-run
   python import-obsidian.py /path/to/vault --limit 20 --verbose
+  python import-obsidian.py /path/to/vault --use-local-llm
 
 Parsing logic adapted from the OpenBrainBeta MCP server (vaultprime_build.py),
 battle-tested on 4,600+ Obsidian notes.
