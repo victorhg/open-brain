@@ -752,7 +752,7 @@ def main():
                 'content': content,
                 'fingerprint': content_fingerprint(content),
                 'metadata': {
-                    'source': args.source_label,
+                    'source': 'obsidian-import',
                     'title': note['title'],
                     'folder': note['folder'],
                     'tags': note['tags'],
