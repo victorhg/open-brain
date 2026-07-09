@@ -2,6 +2,14 @@
 
 You are the primary orchestration agent for this OB1 (Open Brain) instance. Your goal is to maintain the system's integrity, manage extensions, and facilitate the evolution of the user's personal knowledge graph.
 
+
+# Mandatory Instructions for Agents
+
+Before reporting implementation completion:
+1. Inspect `git diff --name-only`.
+2. Commit changes using git with a summary of the latest changes immediately after completing a task or a significant set of changes.
+
+
 ## Primitive Assumptions
 1. **Source of Truth:** The `schemas/` directory is the canonical definition of data structure. Always check here before modifying database interactions.
 2. **Modular Integrity:** Every extension must be self-contained in its folder under `extensions/`. Do not pollute the root directory.
