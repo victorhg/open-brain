@@ -51,12 +51,29 @@ DEFAULT_MIN_WORDS = 50
 WHOLE_NOTE_THRESHOLD = 500      # notes under this word count → 1 thought
 LLM_CHUNK_THRESHOLD = 1000     # sections over this → LLM distillation
 
-# Embedding model
-EMBEDDING_MODEL = "openai/text-embedding-3-small"
-EMBEDDING_DIMS = 1536
+# Local LLM Configuration (Fallback/Alternative)
+LOCAL_LLM_BASE_URL = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
+LOCAL_EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
+LOCAL_CHAT_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
+LOCAL_LLM_API = os.environ.get("LOCAL_LLM_API", "")
 
-# LLM model for chunking long sections
-LLM_MODEL = "openai/gpt-4o-mini"
+# --- Helper: LLM & Embedding Requests ---
+
+def _local_request(path: str, payload: dict):
+    """Generic helper to call local LLM API."""
+    url = f"{LOCAL_LLM_BASE_URL}/{path.lstrip('/')}"
+    headers = {"Authorization": f"Bearer {LOCAL_LLM_API}"} if LOCAL_LLM_API else {}
+    return requests.post(url, json=payload, headers=headers, timeout=60).json()
+
+def _openrouter_request(path: str, payload: dict, api_key: str):
+    """Generic helper to call OpenRouter API."""
+    url = f"{OPENROUTER_BASE_URL}/{path.lstrip('/')}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    return requests.post(url, json=payload, headers=headers, timeout=60).json()
+
 
 # API retry settings
 MAX_RETRIES = 3
@@ -273,10 +290,12 @@ def chunk_note(note: dict, use_llm: bool, openrouter_key: str,
     # Process each chunk — LLM fallback for long sections
     results = []
     for chunk in chunks:
-        if word_count(chunk['content']) > LLM_CHUNK_THRESHOLD and use_llm and openrouter_key:
+        # Use LLM if configured (either local or OpenRouter)
+        if word_count(chunk['content']) > LLM_CHUNK_THRESHOLD and use_llm:
             if verbose:
                 print(f"    LLM chunking section: {chunk['section']} "
                       f"({word_count(chunk['content'])} words)")
+            # Pass openrouter_key; if LOCAL_LLM_BASE_URL is set, llm_distill uses it internally
             llm_thoughts = llm_distill(title, chunk['content'], openrouter_key)
             for thought in llm_thoughts:
                 results.append({
@@ -294,32 +313,30 @@ def chunk_note(note: dict, use_llm: bool, openrouter_key: str,
     return results
 
 
-def llm_distill(title: str, content: str, api_key: str) -> list[str]:
+def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
     """Use LLM to distill a long section into 1-3 atomic thoughts."""
-    # Truncate content to avoid token limits
     if len(content) > 8000:
         content = content[:8000] + "\n[... truncated]"
 
     prompt = SUMMARIZATION_PROMPT.format(title=title, content=content)
+    messages = [{"role": "user", "content": prompt}]
 
     for attempt in range(MAX_RETRIES):
         try:
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
+            if LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL:
+                data = _local_request("chat/completions", {
+                    "model": LOCAL_CHAT_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                })
+            else:
+                data = _openrouter_request("chat/completions", {
                     "model": LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
+                    "messages": messages,
                     "temperature": 0.3,
                     "response_format": {"type": "json_object"},
-                },
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+                }, openrouter_key)
+
             text = data["choices"][0]["message"]["content"]
             parsed = json.loads(text)
             thoughts = parsed.get("thoughts", [])
@@ -333,30 +350,27 @@ def llm_distill(title: str, content: str, api_key: str) -> list[str]:
             else:
                 print(f"    LLM failed after {MAX_RETRIES} attempts, using raw content")
 
-    # Fallback: return content as-is
     return [content.strip()]
+
 
 
 # ── Embeddings ───────────────────────────────────────────────────────────────
 
 def generate_embedding(text: str, api_key: str) -> list[float] | None:
-    """Generate embedding via OpenRouter."""
+    """Generate embedding via OpenRouter or Local LLM."""
     for attempt in range(MAX_RETRIES):
         try:
-            resp = requests.post(
-                "https://openrouter.ai/api/v1/embeddings",
-                headers={
-                    "Authorization": f"Bearer {api_key}",
-                    "Content-Type": "application/json",
-                },
-                json={
+            if LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL:
+                data = _local_request("embeddings", {
+                    "model": LOCAL_EMBEDDING_MODEL,
+                    "input": text[:8000],
+                })
+            else:
+                data = _openrouter_request("embeddings", {
                     "model": EMBEDDING_MODEL,
-                    "input": text[:8000],  # respect token limits
-                },
-                timeout=30,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+                    "input": text[:8000],
+                }, api_key)
+            
             return data["data"][0]["embedding"]
         except (requests.RequestException, KeyError, IndexError) as e:
             status = getattr(getattr(e, 'response', None), 'status_code', None)
@@ -365,15 +379,14 @@ def generate_embedding(text: str, api_key: str) -> list[float] | None:
                 if status == 429:
                     retry_after = getattr(e, 'response', None)
                     retry_after = int(retry_after.headers.get('Retry-After', wait)) if retry_after else wait
-                    print(f"  Rate limited by OpenRouter. Retrying in {retry_after}s "
+                    print(f"  Rate limited. Retrying in {retry_after}s "
                           f"(attempt {attempt + 1}/{MAX_RETRIES})")
                     time.sleep(retry_after)
                 else:
                     time.sleep(wait)
             else:
                 if status == 429:
-                    print(f"  Embedding failed: rate limit exceeded after {MAX_RETRIES} retries. "
-                          f"Try again later or use --limit to reduce batch size.")
+                    print(f"  Embedding failed: rate limit exceeded after {MAX_RETRIES} retries. ")
                 else:
                     print(f"  Embedding failed: {e}")
                 return None
@@ -523,7 +536,7 @@ def main():
               "are you sure this is an Obsidian vault?", file=sys.stderr)
 
     # Load env vars
-    env_file = Path(__file__).parent / ".env"
+    env_file = Path(__file__).parent.parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
             line = line.strip()
@@ -535,18 +548,19 @@ def main():
     supabase_url = os.environ.get("SUPABASE_URL", "")
     supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
     openrouter_key = os.environ.get("OPENROUTER_API_KEY", "")
+    # Check for local LLM env vars (already loaded into os.environ above)
 
     if not args.dry_run:
         if not supabase_url or not supabase_key:
             print("Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required", file=sys.stderr)
             print("Set them in .env or as environment variables", file=sys.stderr)
             sys.exit(1)
-        if not openrouter_key and not args.no_embed:
-            print("Error: OPENROUTER_API_KEY required for embeddings", file=sys.stderr)
-            print("Or use --no-embed to skip embedding generation", file=sys.stderr)
+        if not openrouter_key and not LOCAL_LLM_BASE_URL and not args.no_embed:
+            print("Error: Either OPENROUTER_API_KEY or Local LLM configuration required", file=sys.stderr)
             sys.exit(1)
 
-    use_llm = not args.no_llm and bool(openrouter_key)
+    use_llm = not args.no_llm and (bool(openrouter_key) or bool(LOCAL_LLM_BASE_URL))
+
 
     # ── Preflight: validate connections before any real work ──────────────────
 
@@ -574,16 +588,20 @@ def main():
             print("  Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env", file=sys.stderr)
             sys.exit(1)
 
-        # Test OpenRouter: verify the embedding endpoint works with a short string
+        # Test connections
         if not args.no_embed:
-            test_embedding = generate_embedding("preflight check", openrouter_key)
+            if LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL:
+                test_embedding = generate_embedding("preflight check", "")
+            else:
+                test_embedding = generate_embedding("preflight check", openrouter_key)
+
             if not test_embedding:
                 print("Error: embedding preflight failed.", file=sys.stderr)
-                print("  Check OPENROUTER_API_KEY in .env and that your account has credit.",
+                print("  Check your configuration in .env and ensure the LLM server is running.",
                       file=sys.stderr)
                 sys.exit(1)
 
-        print("  Supabase and OpenRouter connections verified.", flush=True)
+        print("  Supabase and LLM connections verified.", flush=True)
         print()
 
     # Parse skip folders
