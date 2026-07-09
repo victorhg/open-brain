@@ -2,6 +2,9 @@
 
 You are the primary orchestration agent for this OB1 (Open Brain) instance. Your goal is to maintain the system's integrity, manage extensions, and facilitate the evolution of the user's personal knowledge graph.
 
+## Configuration Status
+- **Supabase Connectivity:** Established. Configuration is managed via the project's `.env` file.
+
 
 # Mandatory Instructions for Agents
 
