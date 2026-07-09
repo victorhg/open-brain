@@ -1,0 +1,120 @@
+"""
+llm_client.py — LLM and embedding API client.
+
+Provides request helpers for both local and OpenRouter endpoints,
+with exponential back-off retry logic. Config globals (BASE_LLM_URL,
+LLM_MODEL, etc.) are read from the config module at call time so they
+always reflect values resolved by the main entry point at startup.
+"""
+
+import json
+import time
+
+try:
+    import requests
+except ImportError:
+    import sys
+    print("Missing dependency: requests")
+    print("Run: pip install -r requirements.txt")
+    sys.exit(1)
+
+import config
+
+
+def _local_request(path: str, payload: dict) -> dict:
+    """POST to the configured LLM endpoint (local or OpenRouter via BASE_LLM_URL)."""
+    url = f"{config.BASE_LLM_URL}/{path.lstrip('/')}"
+    headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"} if config.LLM_API_KEY else {}
+    return requests.post(url, json=payload, headers=headers, timeout=60).json()
+
+
+def _openrouter_request(path: str, payload: dict, api_key: str) -> dict:
+    """POST to the OpenRouter API with an explicit key."""
+    url = f"{config.BASE_LLM_URL}/{path.lstrip('/')}"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    return requests.post(url, json=payload, headers=headers, timeout=60).json()
+
+
+def generate_embedding(text: str, api_key: str) -> list[float] | None:
+    """Generate an embedding vector via the configured provider with retry."""
+    for attempt in range(config.MAX_RETRIES):
+        try:
+            if config.BASE_LLM_URL and config.EMBEDDING_MODEL:
+                data = _local_request("embeddings", {
+                    "model": config.EMBEDDING_MODEL,
+                    "input": text[:8000],
+                })
+            else:
+                data = _openrouter_request("embeddings", {
+                    "model": config.EMBEDDING_MODEL,
+                    "input": text[:8000],
+                }, api_key)
+
+            return data["data"][0]["embedding"]
+        except (requests.RequestException, KeyError, IndexError) as e:
+            status = getattr(getattr(e, 'response', None), 'status_code', None)
+            if attempt < config.MAX_RETRIES - 1:
+                wait = config.RETRY_BACKOFF * (2 ** attempt)
+                if status == 429:
+                    retry_after = getattr(e, 'response', None)
+                    retry_after = (
+                        int(retry_after.headers.get('Retry-After', wait))
+                        if retry_after else wait
+                    )
+                    print(f"  Rate limited. Retrying in {retry_after}s "
+                          f"(attempt {attempt + 1}/{config.MAX_RETRIES})")
+                    time.sleep(retry_after)
+                else:
+                    time.sleep(wait)
+            else:
+                if status == 429:
+                    print(f"  Embedding failed: rate limit exceeded after {config.MAX_RETRIES} retries.")
+                else:
+                    print(f"  Embedding failed: {e}")
+                return None
+    return None
+
+
+def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
+    """Use the configured LLM to distill a long section into 1-3 atomic thoughts."""
+    if len(content) > 8000:
+        content = content[:8000] + "\n[... truncated]"
+
+    prompt = config.SUMMARIZATION_PROMPT.format(title=title, content=content)
+    messages = [{"role": "user", "content": prompt}]
+
+    for attempt in range(config.MAX_RETRIES):
+        try:
+            if config.BASE_LLM_URL and config.LLM_MODEL:
+                data = _local_request("chat/completions", {
+                    "model": config.LLM_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                })
+            else:
+                data = _openrouter_request("chat/completions", {
+                    "model": config.LLM_MODEL,
+                    "messages": messages,
+                    "temperature": 0.3,
+                    "response_format": {"type": "json_object"},
+                }, openrouter_key)
+
+            text = data["choices"][0]["message"]["content"]
+            parsed = json.loads(text)
+            thoughts = parsed.get("thoughts", [])
+            if thoughts and isinstance(thoughts, list):
+                return [t for t in thoughts if isinstance(t, str) and t.strip()]
+        except (requests.RequestException, json.JSONDecodeError, KeyError) as e:
+            if 'data' in locals() and isinstance(data, dict):
+                print(f"    LLM response structure error: {data}")
+            if attempt < config.MAX_RETRIES - 1:
+                wait = config.RETRY_BACKOFF * (2 ** attempt)
+                print(f"    LLM retry in {wait}s: {e}")
+                time.sleep(wait)
+            else:
+                print(f"    LLM failed after {config.MAX_RETRIES} attempts, using raw content")
+
+    return [content.strip()]
