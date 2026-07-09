@@ -606,16 +606,35 @@ def main():
                 value = value.strip().strip('"').strip("'")
                 os.environ.setdefault(key.strip(), value)
 
+    # Load env vars
+    env_file = Path(__file__).parent.parent.parent / ".env"
+    if env_file.exists():
+        for line in env_file.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith('#') and '=' in line:
+                key, _, value = line.partition('=')
+                value = value.strip().strip('"').strip("'")
+                os.environ.setdefault(key.strip(), value)
+
     # Provider Configuration
-    # We do NOT need a global declaration here as they are accessed from the module scope.
-    if args.use_local_llm:
+    # Default to Local LLM if its configuration is present in the environment
+    if os.environ.get("LOCAL_LLM_BASE_URL"):
+        print("INFO: Using Local LLM configuration as default.")
         BASE_LLM_URL = LOCAL_LLM_BASE_URL
         EMBEDDING_MODEL = LOCAL_EMBEDDING_MODEL
         LLM_MODEL = LOCAL_CHAT_MODEL
         LLM_API_KEY = LOCAL_LLM_API
+    elif args.use_local_llm:
+        # If user explicitly asks for local, but config is missing, error out
+        print("ERROR: --use-local-llm specified, but local LLM configuration is missing in .env.", file=sys.stderr)
+        sys.exit(1)
     else:
-        # Defaults are already set from env or constants in Config section
-        pass
+        # Default to OpenRouter (as per initial design/testing)
+        print("INFO: Using OpenRouter configuration by default.")
+        BASE_LLM_URL = os.environ.get("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL_DEFAULT)
+        EMBEDDING_MODEL = os.environ.get("OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small")
+        LLM_MODEL = os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
+        LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
 
     if not args.dry_run:
         # These appear to be missing from the original code provided, 
@@ -628,9 +647,10 @@ def main():
             print("Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required", file=sys.stderr)
             print("Set them in .env or as environment variables", file=sys.stderr)
             sys.exit(1)
-        if not LLM_API_KEY and not args.no_embed:
-            print("Error: Either LLM_API_KEY or Local LLM configuration required", file=sys.stderr)
-            sys.exit(1)
+        # Check if ANY LLM configuration is available (local or external)
+        if not LLM_API_KEY and not (BASE_LLM_URL.startswith("http://127.0.0.1") or BASE_LLM_URL.startswith("http://localhost")):
+             print("Error: No LLM API Key or Local LLM configuration found.", file=sys.stderr)
+             sys.exit(1)
 
     use_llm = not args.no_llm and (bool(LLM_API_KEY) or bool(BASE_LLM_URL))
 
