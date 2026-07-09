@@ -5,7 +5,7 @@ You are the primary orchestration agent for this OB1 (Open Brain) instance. Your
 
 # Mandatory Instructions for Agents
 
-Before reporting implementation completion:
+Reporting implementation completion:
 1. Inspect `git diff --name-only`.
 2. Commit changes using git with a summary of the latest changes immediately after completing a task or a significant set of changes.
 
