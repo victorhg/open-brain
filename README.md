@@ -5,7 +5,7 @@ This is your Open Brain, powered by `pi`. This configuration turns your agent in
 > **Origin:** This project is a `pi`-driven adaptation of the [Open Brain (OB1)](https://github.com/NateBJones-Projects/OB1) framework created by [Nate B. Jones](https://natesnewsletter.substack.com/).
 
 ## Why this version?
-Standard OB1 setup requires manual orchestration of scripts and database migrations. This version delegates these chores to `pi`, ensuring that your brain stays organized, documented, and operational with minimal friction.
+Standard OB1 setup requires manual orchestration of scripts and database migrations. This version delegates these chores to `pi`, ensuring that your brain stays organized, documented, and operational with minimal friction. This system is designed to be model-agnostic, leveraging `pi` as your primary orchestrator regardless of the underlying LLM provider.
 
 ## How to use your pi-agent
 Instead of running manual commands, interact with `pi` to manage your brain.
@@ -19,7 +19,7 @@ Instead of running manual commands, interact with `pi` to manage your brain.
 - `/extensions`: Active system modules.
 - `/primitives`: Core logic (RLS, Edge Functions, MCP).
 - `/recipes`: Data import and workflow automation tasks.
-- `/skills`: Reusable agent-logic packs.
+- `/skills`: Reusable agent-logic packs (model-agnostic instructions for your orchestrator).
 
 ## Getting Started
 1. **Ensure environment connectivity:** Point `pi` to your existing Supabase project.
