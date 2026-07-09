@@ -31,13 +31,16 @@ This recipe works with any Obsidian vault regardless of organizational method. I
 
 No special configuration is needed for any of these — the script handles them all with the same parsing pipeline. Use `--dry-run` to preview your vault before importing.
 
-## Prerequisites
+## Testing Local LLM
 
-- Working Open Brain setup ([guide](../../docs/01-getting-started.md))
-- Python 3.10+
-- Your Supabase project URL and API key
-- **Either** OpenRouter API key (default) **or** a local LLM server (e.g., Ollama) for embeddings and chunking
-- Recommended: add a `content_fingerprint` column and unique index for database-level dedup (see [Re-running and Deduplication](#re-running-and-deduplication))
+Before running the import, you can verify your local LLM server connection:
+
+```bash
+python3 recipes/obsidian-vault-import/test_llm.py
+```
+
+This script uses the `LOCAL_LLM_BASE_URL` and `LOCAL_CHAT_MODEL` variables from your `.env` to perform a smoke test.
+
 
 ## Credential Tracker
 
