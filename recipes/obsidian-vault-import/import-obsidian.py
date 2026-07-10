@@ -57,6 +57,7 @@ battle-tested on 4,600+ Obsidian notes.
 """
 
 import argparse
+import json
 import os
 import sys
 import time
@@ -285,6 +286,8 @@ def _build_parser() -> argparse.ArgumentParser:
     # Two-phase operation
     parser.add_argument("--parse-only", action="store_true",
                         help="Parse+chunk the vault and save a cache file; upload later with --load-from")
+    parser.add_argument("--output-json", metavar="PATH",
+                        help="Parse+chunk the vault and output as raw JSON to PATH instead of using the cache format.")
     parser.add_argument("--load-from", metavar="PATH",
                         help="Skip parsing; load a cache file and upload thoughts to Supabase")
     return parser
@@ -585,15 +588,18 @@ def main():
         sys.exit(1)
 
     # ── Mode: --parse-only ────────────────────────────────────────────────────
-    if args.parse_only:
+    if args.parse_only or args.output_json:
         vault_root = _validate_vault(args)
         use_llm = not args.no_llm and (bool(config.LLM_API_KEY) or bool(config.BASE_LLM_URL))
         skip_folders, after_ts = _parse_filter_args(args)
         sync_log = load_sync_log(recipe_dir)
 
         print(f"Vault:    {vault_root}")
-        dry_note = "  (dry run — cache will not be saved)" if args.dry_run else ""
-        print(f"Mode:     PARSE ONLY{dry_note}")
+        if args.output_json:
+            print(f"Mode:     OUTPUT JSON → {args.output_json}")
+        else:
+            dry_note = "  (dry run — cache will not be saved)" if args.dry_run else ""
+            print(f"Mode:     PARSE ONLY{dry_note}")
         print(f"Chunking: {'hybrid (headings + LLM fallback)' if use_llm else 'headings only (--no-llm)'}")
         print()
 
@@ -602,6 +608,12 @@ def main():
 
         if not filtered:
             print("Nothing to parse.")
+            return
+
+        if args.output_json:
+            with open(args.output_json, 'w') as f:
+                json.dump(all_thoughts, f, indent=2)
+            print(f"  Successfully wrote {len(all_thoughts)} thoughts to {args.output_json}")
             return
 
         if args.dry_run:
