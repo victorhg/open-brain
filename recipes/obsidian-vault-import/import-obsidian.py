@@ -390,6 +390,12 @@ def _run_parse_phase(
             thought = {
                 'content': content,
                 'fingerprint': content_fingerprint(content),
+                'source_reference': {
+                    'importer': 'obsidian-vault-import',
+                    'source_type': 'obsidian',
+                    'note_path': note['path'],
+                    'script': 'import-obsidian.py',
+                },
                 'metadata': {
                     'source': 'obsidian-import',
                     'title': note['title'],
@@ -486,6 +492,7 @@ def _run_load_phase(args, all_thoughts, filtered, vault_root, recipe_dir,
             supabase_key=supabase_key,
             created_at=thought.get('created_at'),
             fingerprint=thought.get('fingerprint'),
+            source_reference=thought.get('source_reference'),
         )
 
         if result in ("inserted", "duplicate"):

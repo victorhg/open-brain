@@ -21,7 +21,8 @@ import config
 def insert_thought(content: str, embedding: list[float] | None, metadata: dict,
                    supabase_url: str, supabase_key: str,
                    created_at: str | None = None,
-                   fingerprint: str | None = None) -> str:
+                   fingerprint: str | None = None,
+                   source_reference: dict | None = None) -> str:
     """Insert a thought into the Supabase thoughts table.
 
     Returns 'inserted', 'duplicate', or 'failed'.
@@ -39,6 +40,8 @@ def insert_thought(content: str, embedding: list[float] | None, metadata: dict,
         payload["created_at"] = created_at
     if fingerprint:
         payload["content_fingerprint"] = fingerprint
+    if source_reference:
+        payload["source_reference"] = source_reference
 
     headers = {
         "apikey": supabase_key,
