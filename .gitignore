@@ -2,3 +2,6 @@
 .env
 __pycache__/
 *.pyc
+thoughts-dump.json
+obsidian-parse-cache.json
+obsidian-sync-log.json
