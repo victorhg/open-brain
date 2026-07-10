@@ -191,9 +191,21 @@ def _preflight(supabase_url: str, supabase_key: str, no_embed: bool) -> None:
         sys.exit(1)
 
     if not no_embed:
-        if not generate_embedding("preflight check", config.LLM_API_KEY):
+        test_embedding = generate_embedding("preflight check", config.LLM_API_KEY)
+        if not test_embedding:
             print("Error: embedding preflight failed.", file=sys.stderr)
             print("  Check your configuration in .env and ensure the LLM server is running.",
+                  file=sys.stderr)
+            sys.exit(1)
+        if len(test_embedding) != config.EMBEDDING_DIMENSIONS:
+            print("Error: embedding dimension mismatch.", file=sys.stderr)
+            print(f"  Model produces {len(test_embedding)}-dimensional vectors.", file=sys.stderr)
+            print(f"  Database expects {config.EMBEDDING_DIMENSIONS} dimensions.", file=sys.stderr)
+            print(f"  Fix: set LOCAL_EMBEDDING_MODEL in .env to a {config.EMBEDDING_DIMENSIONS}-dim model,",
+                  file=sys.stderr)
+            print(f"       or set EMBEDDING_DIMENSIONS={len(test_embedding)} if you recreated the DB index,",
+                  file=sys.stderr)
+            print(  "       or use --use-openrouter (text-embedding-3-small = 1536 dims).",
                   file=sys.stderr)
             sys.exit(1)
 

@@ -24,6 +24,12 @@ LLM_CHUNK_THRESHOLD = 1000   # sections over this → LLM distillation
 MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubles each retry
 
+# Expected embedding vector dimensions — must match the pgvector index on the
+# thoughts table. Default is 1536 (OpenAI text-embedding-3-small).
+# If your local model outputs a different number of dimensions you must either
+# switch to a compatible model or recreate the database index.
+EMBEDDING_DIMENSIONS: int = int(os.environ.get("EMBEDDING_DIMENSIONS", "1536"))
+
 # ── LLM configuration (mutable globals) ───────────────────────────────────
 # import-obsidian.py mutates these at startup after resolving the provider.
 # All other modules access them via `config.<VAR>` at call time.

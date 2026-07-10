@@ -78,6 +78,8 @@ def insert_thought(content: str, embedding: list[float] | None, metadata: dict,
                       f"{config.MAX_RETRIES} retries. Use --limit to reduce batch size.",
                       flush=True)
             else:
-                print(f"  Insert failed: {e}", flush=True)
+                body = getattr(getattr(e, 'response', None), 'text', '') or ''
+                detail = f" — {body}" if body else ""
+                print(f"  Insert failed: {e}{detail}", flush=True)
             return "failed"
     return "failed"
