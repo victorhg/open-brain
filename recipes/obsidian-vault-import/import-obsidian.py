@@ -56,6 +56,7 @@ from reporter import write_report
 from security import scan_for_secrets
 from supabase_client import insert_thought
 from sync_log import content_fingerprint, content_hash, load_sync_log, save_sync_log
+from thoughts_cache import PARSE_CACHE_FILE, load_parse_cache, save_parse_cache
 
 
 def _load_env(script_dir: Path):
@@ -159,6 +160,56 @@ def _preflight(supabase_url: str, supabase_key: str, no_embed: bool) -> None:
     print()
 
 
+def _validate_vault(args) -> Path:
+    """Validate vault_path arg and return the resolved Path."""
+    if not args.vault_path:
+        print("Error: vault_path is required.", file=sys.stderr)
+        sys.exit(1)
+    vault_root = Path(args.vault_path).expanduser().resolve()
+    if not vault_root.is_dir():
+        print(f"Error: vault not found at {vault_root}", file=sys.stderr)
+        sys.exit(1)
+    if not (vault_root / ".obsidian").is_dir():
+        print(f"Warning: {vault_root} doesn't have a .obsidian/ folder — "
+              "are you sure this is an Obsidian vault?", file=sys.stderr)
+    return vault_root
+
+
+def _validate_load_credentials(args) -> tuple[str, str]:
+    """Validate Supabase credentials and LLM key; return (supabase_url, supabase_key)."""
+    supabase_url = os.environ.get("SUPABASE_URL")
+    supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not supabase_key:
+        print("Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required", file=sys.stderr)
+        print("Set them in .env or as environment variables", file=sys.stderr)
+        sys.exit(1)
+    if not config.LLM_API_KEY and not (
+        config.BASE_LLM_URL.startswith("http://127.0.0.1")
+        or config.BASE_LLM_URL.startswith("http://localhost")
+    ):
+        print("Error: No LLM API Key or Local LLM configuration found.", file=sys.stderr)
+        sys.exit(1)
+    return supabase_url, supabase_key
+
+
+def _parse_filter_args(args) -> tuple[set[str], float]:
+    """Return (skip_folders, after_ts) derived from CLI args."""
+    skip_folders: set[str] = set()
+    if args.skip_folders:
+        skip_folders = {f.strip() for f in args.skip_folders.split(",") if f.strip()}
+
+    after_ts = 0.0
+    if args.after:
+        try:
+            after_ts = datetime.strptime(args.after, "%Y-%m-%d").replace(
+                tzinfo=timezone.utc).timestamp()
+        except ValueError:
+            print(f"Error: invalid date format '{args.after}', use YYYY-MM-DD", file=sys.stderr)
+            sys.exit(1)
+
+    return skip_folders, after_ts
+
+
 # ── Argument parsing ───────────────────────────────────────────────────────────
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -191,80 +242,30 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Generate a markdown summary report")
     parser.add_argument("--use-local-llm", action="store_true",
                         help="Force the use of Local LLM configuration instead of OpenRouter")
+    # Two-phase operation
+    parser.add_argument("--parse-only", action="store_true",
+                        help="Parse+chunk the vault and save a cache file; upload later with --load-from")
+    parser.add_argument("--load-from", metavar="PATH",
+                        help="Skip parsing; load a cache file and upload thoughts to Supabase")
     return parser
 
 
-# ── Main pipeline ──────────────────────────────────────────────────────────────
 
-def main():
-    sys.stdout.reconfigure(line_buffering=True)
+# ── Phase functions ───────────────────────────────────────────────────────────
 
-    args = _build_parser().parse_args()
-    recipe_dir = Path(__file__).parent
+def _run_parse_phase(
+    args,
+    vault_root,
+    skip_folders: set,
+    after_ts: float,
+    sync_log: dict,
+    use_llm: bool,
+) -> tuple:
+    """Stages 1-4: walk vault, parse, filter, chunk into thoughts.
 
-    _load_env(recipe_dir)
-    _configure_provider(args)
-
-    if args.test_llm:
-        _run_test_llm()
-
-    # Validate vault
-    if not args.vault_path:
-        print("Error: vault_path is required.", file=sys.stderr)
-        sys.exit(1)
-
-    vault_root = Path(args.vault_path).expanduser().resolve()
-    if not vault_root.is_dir():
-        print(f"Error: vault not found at {vault_root}", file=sys.stderr)
-        sys.exit(1)
-    if not (vault_root / ".obsidian").is_dir():
-        print(f"Warning: {vault_root} doesn't have a .obsidian/ folder — "
-              "are you sure this is an Obsidian vault?", file=sys.stderr)
-
-    # Validate credentials (live run only)
-    supabase_url = supabase_key = None
-    if not args.dry_run:
-        supabase_url = os.environ.get("SUPABASE_URL")
-        supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-
-        if not supabase_url or not supabase_key:
-            print("Error: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY required", file=sys.stderr)
-            print("Set them in .env or as environment variables", file=sys.stderr)
-            sys.exit(1)
-        if not config.LLM_API_KEY and not (
-            config.BASE_LLM_URL.startswith("http://127.0.0.1")
-            or config.BASE_LLM_URL.startswith("http://localhost")
-        ):
-            print("Error: No LLM API Key or Local LLM configuration found.", file=sys.stderr)
-            sys.exit(1)
-
-        _preflight(supabase_url, supabase_key, args.no_embed)
-
-    use_llm = not args.no_llm and (bool(config.LLM_API_KEY) or bool(config.BASE_LLM_URL))
-
-    # Parse --skip-folders and --after
-    skip_folders: set[str] = set()
-    if args.skip_folders:
-        skip_folders = {f.strip() for f in args.skip_folders.split(",") if f.strip()}
-
-    after_ts = 0.0
-    if args.after:
-        try:
-            after_ts = datetime.strptime(args.after, "%Y-%m-%d").replace(
-                tzinfo=timezone.utc).timestamp()
-        except ValueError:
-            print(f"Error: invalid date format '{args.after}', use YYYY-MM-DD", file=sys.stderr)
-            sys.exit(1)
-
-    sync_log = load_sync_log(recipe_dir)
-
-    print(f"Vault:    {vault_root}")
-    print(f"Mode:     {'DRY RUN' if args.dry_run else 'LIVE IMPORT'}")
-    print(f"Chunking: {'hybrid (headings + LLM fallback)' if use_llm else 'headings only (--no-llm)'}")
-    print()
-
-    # ── Stage 1+2: Walk + Parse ───────────────────────────────────────────────
-
+    Returns (all_thoughts, filtered_notes, skip_reasons).
+    """
+    # Stage 1+2: Walk + Parse
     print("Scanning vault...")
     notes = []
     parse_errors = 0
@@ -303,8 +304,7 @@ def main():
 
     print(f"  Found {len(notes)} notes ({parse_errors} parse errors)")
 
-    # ── Stage 3: Filter ───────────────────────────────────────────────────────
-
+    # Stage 3: Filter
     filtered = []
     skip_reasons = {"short": 0, "duplicate": 0, "date_filter": 0, "template": 0}
 
@@ -340,11 +340,9 @@ def main():
     print()
 
     if not filtered:
-        print("Nothing to import.")
-        return
+        return [], [], skip_reasons
 
-    # ── Stage 4: Chunk ────────────────────────────────────────────────────────
-
+    # Stage 4: Chunk
     print("Chunking notes into thoughts...")
     all_thoughts = []
 
@@ -369,9 +367,6 @@ def main():
                     'date': note_date,
                     'wikilinks': note['wikilinks'],
                     # Preserve full YAML frontmatter verbatim for downstream queries.
-                    # Top-level metadata keys above remain authoritative for OB1's
-                    # standard fields (date/tags); this side-car carries everything
-                    # else (e.g. mood, location metadata, custom IDs, plugin data).
                     'frontmatter': _jsonify_frontmatter(note['meta']),
                 },
                 'note_path': note['path'],
@@ -390,44 +385,48 @@ def main():
     print(f"  Avg {len(all_thoughts) / max(len(filtered), 1):.1f} thoughts per note")
     print()
 
-    # ── Dry run summary ───────────────────────────────────────────────────────
+    return all_thoughts, filtered, skip_reasons
 
-    if args.dry_run:
-        dry_secrets = 0
-        if not args.no_secret_scan:
-            for t in all_thoughts:
-                secret_match = scan_for_secrets(t['content'])
-                if secret_match:
-                    dry_secrets += 1
-                    title = t['metadata'].get('title', '?')
-                    section = t['metadata'].get('section', '')
-                    location = f"{title} > {section}" if section else title
-                    print(f"  SECRET DETECTED: {location} — {secret_match}")
-        print()
-        print("=== DRY RUN COMPLETE ===")
-        print(f"Would import {len(all_thoughts)} thoughts from {len(filtered)} notes")
-        if any(t.get('was_llm_chunked') for t in all_thoughts):
-            llm_count = sum(1 for t in all_thoughts if t.get('was_llm_chunked'))
-            print(f"  (Note: LLM chunking was used for {llm_count} thoughts)")
-        if dry_secrets:
-            print(f"Would skip {dry_secrets} thoughts containing potential secrets")
-        if args.verbose:
-            print("\nSample thoughts:")
-            for t in all_thoughts[:5]:
-                preview = t['content'][:120] + "..." if len(t['content']) > 120 else t['content']
-                print(f"  [{t['metadata']['folder']}] {preview}")
-        if args.report:
-            write_report(all_thoughts, filtered, vault_root, recipe_dir,
-                         skip_reasons, dry_run=True)
-        return
 
-    # ── Stage 5: Embed + Insert ───────────────────────────────────────────────
+def _print_parse_summary(all_thoughts, filtered, skip_reasons, args,
+                          vault_root=None, recipe_dir=None):
+    """Print a dry-run summary for the parse phase."""
+    dry_secrets = 0
+    if not args.no_secret_scan:
+        for t in all_thoughts:
+            secret_match = scan_for_secrets(t['content'])
+            if secret_match:
+                dry_secrets += 1
+                title = t['metadata'].get('title', '?')
+                section = t['metadata'].get('section', '')
+                location = f"{title} > {section}" if section else title
+                print(f"  SECRET DETECTED: {location} — {secret_match}")
+    print()
+    print("=== DRY RUN COMPLETE ===")
+    print(f"Would generate {len(all_thoughts)} thoughts from {len(filtered)} notes")
+    if any(t.get('was_llm_chunked') for t in all_thoughts):
+        llm_count = sum(1 for t in all_thoughts if t.get('was_llm_chunked'))
+        print(f"  (Note: LLM chunking was used for {llm_count} thoughts)")
+    if dry_secrets:
+        print(f"Would skip {dry_secrets} thoughts containing potential secrets")
+    if args.verbose:
+        print("\nSample thoughts:")
+        for t in all_thoughts[:5]:
+            preview = t['content'][:120] + "..." if len(t['content']) > 120 else t['content']
+            print(f"  [{t['metadata']['folder']}] {preview}")
+    if args.report and vault_root and recipe_dir:
+        write_report(all_thoughts, filtered, vault_root, recipe_dir, skip_reasons, dry_run=True)
 
+
+def _run_load_phase(args, all_thoughts, filtered, vault_root, recipe_dir,
+                    sync_log, skip_reasons, supabase_url, supabase_key):
+    """Stage 5: generate embeddings, insert into Supabase, update sync log."""
     print("Inserting thoughts (no embeddings)..." if args.no_embed
           else "Embedding and inserting thoughts...")
+
     inserted = duplicates = embed_failures = insert_failures = consecutive_failures = 0
     secrets_skipped = 0
-    successful_paths: dict[str, str] = {}
+    successful_paths = {}
 
     for i, thought in enumerate(all_thoughts):
         if not args.no_secret_scan:
@@ -446,7 +445,7 @@ def main():
             if not embedding:
                 embed_failures += 1
             else:
-                time.sleep(0.15)  # courtesy rate-limit between embedding calls
+                time.sleep(0.15)
 
         result = insert_thought(
             content=thought['content'],
@@ -498,8 +497,7 @@ def main():
     if insert_failures:
         print(f"  Insert failures:    {insert_failures}")
 
-    # ── Update sync log ───────────────────────────────────────────────────────
-
+    # Update sync log
     sync_log["vault_path"] = str(vault_root)
     sync_log["last_run"] = datetime.now(tz=timezone.utc).isoformat()
 
@@ -520,6 +518,113 @@ def main():
     if args.report:
         write_report(all_thoughts, filtered, vault_root, recipe_dir, skip_reasons,
                      dry_run=False, inserted=inserted, failures=insert_failures)
+
+
+# ── Main entry point ──────────────────────────────────────────────────────────
+
+def main():
+    sys.stdout.reconfigure(line_buffering=True)
+    args = _build_parser().parse_args()
+    recipe_dir = Path(__file__).parent
+
+    _load_env(recipe_dir)
+    _configure_provider(args)
+
+    if args.test_llm:
+        _run_test_llm()
+
+    if args.parse_only and args.load_from:
+        print("Error: --parse-only and --load-from are mutually exclusive.", file=sys.stderr)
+        sys.exit(1)
+
+    # ── Mode: --parse-only ────────────────────────────────────────────────────
+    if args.parse_only:
+        vault_root = _validate_vault(args)
+        use_llm = not args.no_llm and (bool(config.LLM_API_KEY) or bool(config.BASE_LLM_URL))
+        skip_folders, after_ts = _parse_filter_args(args)
+        sync_log = load_sync_log(recipe_dir)
+
+        print(f"Vault:    {vault_root}")
+        dry_note = "  (dry run — cache will not be saved)" if args.dry_run else ""
+        print(f"Mode:     PARSE ONLY{dry_note}")
+        print(f"Chunking: {'hybrid (headings + LLM fallback)' if use_llm else 'headings only (--no-llm)'}")
+        print()
+
+        all_thoughts, filtered, skip_reasons = _run_parse_phase(
+            args, vault_root, skip_folders, after_ts, sync_log, use_llm)
+
+        if not filtered:
+            print("Nothing to parse.")
+            return
+
+        if args.dry_run:
+            _print_parse_summary(all_thoughts, filtered, skip_reasons, args,
+                                  vault_root, recipe_dir)
+            return
+
+        cache_path = recipe_dir / PARSE_CACHE_FILE
+        save_parse_cache(cache_path, vault_root, all_thoughts, filtered, skip_reasons)
+        print(f"  Parse cache saved → {cache_path}")
+        print(f'  Upload with:  python import-obsidian.py --load-from "{cache_path}"')
+        return
+
+    # ── Mode: --load-from ─────────────────────────────────────────────────────
+    if args.load_from:
+        cache_path = Path(args.load_from).expanduser().resolve()
+        if not cache_path.exists():
+            print(f"Error: cache file not found: {cache_path}", file=sys.stderr)
+            sys.exit(1)
+
+        all_thoughts, filtered, vault_root, skip_reasons = load_parse_cache(cache_path)
+        sync_log = load_sync_log(recipe_dir)
+
+        print(f"Cache:    {cache_path.name}  ({len(all_thoughts)} thoughts, {len(filtered)} notes)")
+        print(f"Vault:    {vault_root}")
+        print(f"Mode:     {'DRY RUN' if args.dry_run else 'LIVE IMPORT'}")
+        print()
+
+        if args.dry_run:
+            _print_parse_summary(all_thoughts, filtered, skip_reasons, args,
+                                  vault_root, recipe_dir)
+            return
+
+        supabase_url, supabase_key = _validate_load_credentials(args)
+        _preflight(supabase_url, supabase_key, args.no_embed)
+        _run_load_phase(args, all_thoughts, filtered, vault_root, recipe_dir,
+                        sync_log, skip_reasons, supabase_url, supabase_key)
+        return
+
+    # ── Mode: full pipeline (default) ─────────────────────────────────────────
+    vault_root = _validate_vault(args)
+    supabase_url = supabase_key = None
+
+    if not args.dry_run:
+        supabase_url, supabase_key = _validate_load_credentials(args)
+        _preflight(supabase_url, supabase_key, args.no_embed)
+
+    use_llm = not args.no_llm and (bool(config.LLM_API_KEY) or bool(config.BASE_LLM_URL))
+    skip_folders, after_ts = _parse_filter_args(args)
+    sync_log = load_sync_log(recipe_dir)
+
+    print(f"Vault:    {vault_root}")
+    print(f"Mode:     {'DRY RUN' if args.dry_run else 'LIVE IMPORT'}")
+    print(f"Chunking: {'hybrid (headings + LLM fallback)' if use_llm else 'headings only (--no-llm)'}")
+    print()
+
+    all_thoughts, filtered, skip_reasons = _run_parse_phase(
+        args, vault_root, skip_folders, after_ts, sync_log, use_llm)
+
+    if not filtered:
+        print("Nothing to import.")
+        return
+
+    if args.dry_run:
+        _print_parse_summary(all_thoughts, filtered, skip_reasons, args,
+                              vault_root, recipe_dir)
+        return
+
+    _run_load_phase(args, all_thoughts, filtered, vault_root, recipe_dir,
+                    sync_log, skip_reasons, supabase_url, supabase_key)
 
 
 if __name__ == '__main__':
