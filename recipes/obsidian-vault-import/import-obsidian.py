@@ -3,26 +3,57 @@
 import-obsidian.py — Import an Obsidian vault into Open Brain as searchable thoughts.
 
 Parses markdown files with frontmatter, chunks long notes into atomic thoughts,
-generates embeddings via OpenRouter, and inserts into Supabase.
+generates embeddings via a local or OpenRouter LLM, and inserts into Supabase.
 
-Usage:
+── Standard usage ────────────────────────────────────────────────────────────
+
+  # Full pipeline in one shot
   python import-obsidian.py /path/to/vault
+
+  # Preview without inserting anything
   python import-obsidian.py /path/to/vault --dry-run
+
+  # Common options
   python import-obsidian.py /path/to/vault --limit 20 --verbose
-  python import-obsidian.py /path/to/vault --use-local-llm
+  python import-obsidian.py /path/to/vault --no-llm          # heading splits only
+  python import-obsidian.py /path/to/vault --use-local-llm   # force local LLM
+
+── Two-phase mode (recommended for large vaults) ─────────────────────────────
+
+  For vaults with 1,000+ notes, LLM chunking alone can take hours. Supabase
+  connection errors that appear late in the upload would force a full restart.
+  Two-phase mode checkpoints the parsed output to disk so only the upload step
+  needs to be re-run on failure.
+
+  # Phase 1 — parse + chunk only; no Supabase credentials required
+  python import-obsidian.py /path/to/vault --parse-only
+
+  # Phase 2 — embed + insert from the saved cache; no vault access required
+  python import-obsidian.py --load-from obsidian-parse-cache.json
+
+  # Dry-run either phase without writing anything
+  python import-obsidian.py /path/to/vault --parse-only --dry-run
+  python import-obsidian.py --load-from obsidian-parse-cache.json --dry-run
+
+── Other utilities ───────────────────────────────────────────────────────────
+
+  python import-obsidian.py --test-llm          # verify LLM + embedding endpoints
+  python import-obsidian.py /path/to/vault --report  # write import-report.md
+
+── Module layout (src/) ──────────────────────────────────────────────────────
+
+  config.py          — constants and mutable LLM config globals
+  security.py        — secret detection patterns and scan_for_secrets()
+  llm_client.py      — LLM / embedding API calls with retry and fence-stripping
+  obsidian_parser.py — vault traversal, note parsing, date extraction
+  chunker.py         — heading-based and LLM-assisted chunking
+  supabase_client.py — Supabase thought insertion with fingerprint dedup
+  sync_log.py        — import sync log and content fingerprinting
+  reporter.py        — markdown summary report generation
+  thoughts_cache.py  — parse-phase cache (save / load between phases)
 
 Parsing logic adapted from the OpenBrainBeta MCP server (vaultprime_build.py),
 battle-tested on 4,600+ Obsidian notes.
-
-Module layout (src/):
-  config.py          — constants and mutable LLM config globals
-  security.py        — secret detection
-  llm_client.py      — LLM / embedding API calls
-  obsidian_parser.py — vault traversal and note parsing
-  chunker.py         — heading and LLM-based chunking
-  supabase_client.py — Supabase thought insertion
-  sync_log.py        — import sync log and fingerprinting
-  reporter.py        — markdown summary report
 """
 
 import argparse
