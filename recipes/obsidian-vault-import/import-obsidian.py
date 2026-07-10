@@ -38,6 +38,7 @@ generates embeddings via a local or OpenRouter LLM, and inserts into Supabase.
 ── Other utilities ───────────────────────────────────────────────────────────
 
   python import-obsidian.py --test-llm          # verify LLM + embedding endpoints
+  python import-obsidian.py --test-embeddings    # verify embedding endpoint and dimension match
   python import-obsidian.py /path/to/vault --report  # write import-report.md
 
 ── Module layout (src/) ──────────────────────────────────────────────────────
@@ -167,6 +168,33 @@ def _run_test_llm() -> None:
     sys.exit(0)
 
 
+def _run_test_embeddings() -> None:
+    """Test the embedding endpoint, assert the returned dimension matches config, then exit."""
+    print("Testing Embedding connection...")
+    print(f"  Base URL:          {config.BASE_LLM_URL}")
+    print(f"  Embedding Model:   {config.EMBEDDING_MODEL}")
+    print(f"  Expected dims:     {config.EMBEDDING_DIMENSIONS}")
+    print(f"  API Key Present:   {bool(config.LLM_API_KEY)}")
+    print()
+
+    embedding = generate_embedding("test embedding", config.LLM_API_KEY)
+    if not embedding:
+        print("FAILED: embedding request returned None.", file=sys.stderr)
+        print("  Check BASE_LLM_URL, EMBEDDING_MODEL, and API key in .env", file=sys.stderr)
+        sys.exit(1)
+
+    actual_dims = len(embedding)
+    if actual_dims == config.EMBEDDING_DIMENSIONS:
+        print(f"SUCCESS: received {actual_dims}-dimensional vector — matches EMBEDDING_DIMENSIONS.")
+        sys.exit(0)
+    else:
+        print(f"FAILED: dimension mismatch.", file=sys.stderr)
+        print(f"  Model returned:    {actual_dims} dims", file=sys.stderr)
+        print(f"  Config expects:    {config.EMBEDDING_DIMENSIONS} dims", file=sys.stderr)
+        print(f"  Fix: set EMBEDDING_DIMENSIONS={actual_dims} in .env", file=sys.stderr)
+        sys.exit(1)
+
+
 def _preflight(supabase_url: str, supabase_key: str, no_embed: bool) -> None:
     """Validate Supabase connectivity and embedding generation before any real work."""
     print("Preflight check...", flush=True)
@@ -291,6 +319,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Show detailed progress")
     parser.add_argument("--test-llm", action="store_true",
                         help="Test the configured LLM and Embedding connections and exit")
+    parser.add_argument("--test-embeddings", action="store_true",
+                        help="Test the embedding endpoint and assert the returned dimension matches EMBEDDING_DIMENSIONS, then exit")
     parser.add_argument("--report", action="store_true",
                         help="Generate a markdown summary report")
     parser.add_argument("--use-openrouter", action="store_true",
@@ -594,6 +624,9 @@ def main():
 
     if args.test_llm:
         _run_test_llm()
+
+    if args.test_embeddings:
+        _run_test_embeddings()
 
     if args.parse_only and args.load_from:
         print("Error: --parse-only and --load-from are mutually exclusive.", file=sys.stderr)

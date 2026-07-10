@@ -67,21 +67,27 @@ def _openrouter_request(path: str, payload: dict, api_key: str) -> dict:
 def generate_embedding(text: str, api_key: str) -> list[float] | None:
     """Generate an embedding vector via the configured provider with retry."""
     for attempt in range(config.MAX_RETRIES):
+        print(f"generating embedding {config.EMBEDDING_MODEL}, {config.BASE_LLM_URL}")
         try:
+            payload = {
+                "model": config.EMBEDDING_MODEL,
+                "input": text[:8000],
+                "dimensions": config.EMBEDDING_DIMENSIONS,
+            }
             if config.BASE_LLM_URL and config.EMBEDDING_MODEL:
-                data = _local_request("embeddings", {
-                    "model": config.EMBEDDING_MODEL,
-                    "input": text[:8000],
-                })
+                data = _local_request("embeddings", payload)
             else:
-                data = _openrouter_request("embeddings", {
-                    "model": config.EMBEDDING_MODEL,
-                    "input": text[:8000],
-                }, api_key)
+                data = _openrouter_request("embeddings", payload, api_key)
+
+            if "data" not in data:
+                raise ValueError(f"Unexpected response (no 'data' key): {data}")
 
             return data["data"][0]["embedding"]
-        except (requests.RequestException, KeyError, IndexError) as e:
+        except (requests.RequestException, KeyError, IndexError, ValueError) as e:
             status = getattr(getattr(e, 'response', None), 'status_code', None)
+            # Show the raw server response to aid debugging
+            if isinstance(e, (KeyError, IndexError, ValueError)) and 'data' in dir():
+                print(f"  Server response: {locals().get('data')}")
             if attempt < config.MAX_RETRIES - 1:
                 wait = config.RETRY_BACKOFF * (2 ** attempt)
                 if status == 429:
@@ -94,6 +100,7 @@ def generate_embedding(text: str, api_key: str) -> list[float] | None:
                           f"(attempt {attempt + 1}/{config.MAX_RETRIES})")
                     time.sleep(retry_after)
                 else:
+                    print(f"  Retrying (attempt {attempt + 1}/{config.MAX_RETRIES}): {e}")
                     time.sleep(wait)
             else:
                 if status == 429:
