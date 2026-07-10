@@ -16,7 +16,7 @@ generates embeddings via a local or OpenRouter LLM, and inserts into Supabase.
   # Common options
   python import-obsidian.py /path/to/vault --limit 20 --verbose
   python import-obsidian.py /path/to/vault --no-llm          # heading splits only
-  python import-obsidian.py /path/to/vault --use-local-llm   # force local LLM
+  python import-obsidian.py /path/to/vault --use-openrouter   # use OpenRouter instead of local LLM
 
 ── Two-phase mode (recommended for large vaults) ─────────────────────────────
 
@@ -103,25 +103,34 @@ def _load_env(script_dir: Path):
 
 
 def _configure_provider(args) -> None:
-    """Resolve the LLM provider and mutate config module globals accordingly."""
-    if os.environ.get("LOCAL_LLM_BASE_URL"):
-        print("INFO: Using Local LLM configuration as default.")
-        config.BASE_LLM_URL = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
-        config.EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
-        config.LLM_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
-        config.LLM_API_KEY = os.environ.get("LOCAL_LLM_API", "")
-    elif args.use_local_llm:
-        print("ERROR: --use-local-llm specified, but local LLM configuration is missing in .env.",
-              file=sys.stderr)
-        sys.exit(1)
-    else:
-        print("INFO: Using OpenRouter configuration by default.")
+    """Resolve the LLM provider and mutate config module globals accordingly.
+
+    Default: local LLM (LOCAL_LLM_BASE_URL must be set in .env).
+    Pass --use-openrouter to route through OpenRouter instead.
+    """
+    if args.use_openrouter:
+        print("INFO: Using OpenRouter configuration (--use-openrouter).")
         config.BASE_LLM_URL = os.environ.get(
             "OPENROUTER_BASE_URL", config.OPENROUTER_BASE_URL_DEFAULT)
         config.EMBEDDING_MODEL = os.environ.get(
             "OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small")
         config.LLM_MODEL = os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
         config.LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
+        if not config.LLM_API_KEY:
+            print("ERROR: --use-openrouter requires OPENROUTER_API_KEY to be set in .env.",
+                  file=sys.stderr)
+            sys.exit(1)
+    else:
+        local_url = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
+        if not local_url:
+            print("ERROR: No local LLM configured. Set LOCAL_LLM_BASE_URL in .env, "
+                  "or pass --use-openrouter.", file=sys.stderr)
+            sys.exit(1)
+        print("INFO: Using Local LLM configuration (default).")
+        config.BASE_LLM_URL = local_url
+        config.EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
+        config.LLM_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
+        config.LLM_API_KEY = os.environ.get("LOCAL_LLM_API", "")
 
 
 def _run_test_llm() -> None:
@@ -271,8 +280,8 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Test the configured LLM and Embedding connections and exit")
     parser.add_argument("--report", action="store_true",
                         help="Generate a markdown summary report")
-    parser.add_argument("--use-local-llm", action="store_true",
-                        help="Force the use of Local LLM configuration instead of OpenRouter")
+    parser.add_argument("--use-openrouter", action="store_true",
+                        help="Route LLM and embedding calls through OpenRouter instead of the local LLM")
     # Two-phase operation
     parser.add_argument("--parse-only", action="store_true",
                         help="Parse+chunk the vault and save a cache file; upload later with --load-from")
