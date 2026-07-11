@@ -19,7 +19,7 @@ Instead of running manual commands, interact with `pi` to manage your brain.
 - `/extensions`: Active system modules.
 - `/primitives`: Core logic (RLS, Edge Functions, MCP).
 - `/recipes`: Data import and workflow automation tasks.
-  - `obsidian-vault-import`: Local-first enabled tool for syncing Obsidian vaults.
+  - `obsidian-vault-import`: Local-first enabled tool for syncing Obsidian vaults. (Status: Successfully imported 3909 thoughts.)
 - `/skills`: Reusable agent-logic packs (model-agnostic instructions for your orchestrator).
 
 ## 🧠 Agent Operational Knowledge Base
