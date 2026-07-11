@@ -5,3 +5,4 @@ __pycache__/
 thoughts-dump.json
 obsidian-parse-cache.json
 obsidian-sync-log.json
+.last-session
