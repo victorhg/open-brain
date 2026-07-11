@@ -196,11 +196,17 @@ async function handleTool(name: string, args: any): Promise<string> {
     case "capture_thought": {
       const [embedding, meta] = await Promise.all([generateEmbedding(args.content), extractMetadata(args.content)]);
       const { data, error } = await supabase.from("thoughts").insert({
-        content: args.content, embedding, type: meta.type, category: meta.category,
-        source: "mcp", people: meta.people, action_items: meta.action_items, topics: meta.topics, metadata: {},
+        content: args.content, embedding, metadata: {
+          type: meta.type,
+          category: meta.category,
+          source: "mcp",
+          people: meta.people,
+          action_items: meta.action_items,
+          topics: meta.topics
+        },
       }).select("id").single();
       if (error) return `Error saving: ${error.message}`;
-      return `Captured as ${meta.type}. ID: ${data.id}`;
+      return `Captured thought successfully. ID: ${data.id}`;
     }
     default:
       return `Unknown tool: ${name}`;
