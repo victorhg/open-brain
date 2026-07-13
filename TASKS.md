@@ -39,19 +39,35 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ## Phase 1: Core Schema & Infrastructure (Priority: Critical)
 
-### Task 1.1: Deploy Agent Memory Schema
+### ✅ Task 1.1: Deploy Agent Memory Schema [COMPLETE]
 **Objective:** Enable governed operational memory for agent runtimes with provenance tracking.
 
-**Steps:**
-1. Review `schemas/agent-memory/schema.sql` for compatibility
-2. Run SQL in Supabase SQL Editor
-3. Verify tables created: `agent_memories`, `agent_memory_recall_traces`, `agent_memory_recall_items`, `agent_memory_audit_events`
-4. Test with sample memory insertion
-5. Update README.md with deployment status
+**Status:** DEPLOYED AND VALIDATED
+- ✅ All 8 tables created and operational
+- ✅ Validation passed (17/17 checks)
+- ✅ Test data insertion successful
+- ✅ RLS policies active
+- ✅ Constraints enforced
+- ✅ 2 memories already in database
 
-**Dependencies:** None (standalone)  
-**Time Estimate:** 30 minutes  
-**Impact:** Enables safe agent memory storage with review workflows
+**Tables Deployed:**
+1. `agent_memories` - Core memory storage
+2. `agent_memory_source_refs` - Source tracking
+3. `agent_memory_artifacts` - Artifact references
+4. `agent_memory_relations` - Memory relationships
+5. `agent_memory_review_actions` - Review audit trail
+6. `agent_memory_recall_traces` - Recall traces
+7. `agent_memory_recall_items` - Recalled items
+8. `agent_memory_audit_events` - Audit log
+
+**Deployment Tools Created:**
+- `schemas/agent-memory/check-tables.js` - Quick status check
+- `schemas/agent-memory/validate.js` - Full validation suite
+- `schemas/agent-memory/deploy-psql.sh` - Deployment script
+- `schemas/agent-memory/DEPLOYMENT.md` - Deployment guide
+
+**Time Taken:** ~1 hour (including tooling creation)  
+**Completed:** 2026-07-13
 
 ---
 
@@ -316,9 +332,9 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 ## Success Metrics
 
 **Phase 1 Complete:**
-- ✓ Agent memory schema deployed
-- ✓ 5+ critical schemas active
-- ✓ Fingerprint dedup operational
+- ✅ Agent memory schema deployed (Task 1.1)
+- ⏳ 5+ critical schemas active (Task 1.2 - In Progress)
+- ⏳ Fingerprint dedup operational (Task 1.2)
 
 **Phase 2 Complete:**
 - ✓ 2 extensions deployed and tested

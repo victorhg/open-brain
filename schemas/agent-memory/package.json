@@ -1,0 +1,13 @@
+{
+  "name": "agent-memory-schema-validator",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Validation script for OB1 Agent Memory schema",
+  "main": "validate.js",
+  "scripts": {
+    "validate": "node validate.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10"
+  }
+}
