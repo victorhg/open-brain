@@ -117,6 +117,7 @@ def _configure_provider(args) -> None:
     config.BASE_LLM_URL = local_url
     config.EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
     config.LLM_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
+    config.LLM_CHUNK_MODEL = os.environ.get("LOCAL_CHUNK_MODEL", "")
     config.LLM_API_KEY = os.environ.get("LOCAL_LLM_API", "")
 
 
