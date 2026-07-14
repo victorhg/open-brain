@@ -9,3 +9,6 @@ obsidian-sync-log.json
 .vscode
 .env.local
 .temp
+node_modules/
+package-lock.json
+

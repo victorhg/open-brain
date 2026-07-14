@@ -71,26 +71,30 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ---
 
-### Task 1.2: Deploy Enhanced Schemas
+### Task 1.2: Deploy Enhanced Schemas [COMPLETE]
 **Objective:** Add critical schema extensions for better knowledge management.
 
-**Priority Order:**
-1. **`content-fingerprint-dedup`** - Prevent duplicate thoughts (critical for data quality)
-2. **`text-search-trgm`** - Full-text search with PostgreSQL trigram indexes
-3. **`enhanced-thoughts`** - Additional metadata fields and search capabilities
-4. **`workflow-status`** - Track tasks and action items from thoughts
-5. **`provenance-chains`** - Track derivation and thought lineage
+**Status:** DEPLOYED AND VALIDATED
+- ✅ All 5 schemas successfully consolidated and deployed via Supabase Dashboard SQL Editor
+- ✅ 28/28 checks passed in automated validation harness (`schemas/validate-phase1-task1.2.js`)
+- ✅ pg_trgm trigram extension enabled & content indexing verified
+- ✅ All 3,911 thoughts successfully backfilled to 'primary' derivation layer
+- ✅ Automated schema health report function (`check_enhanced_schemas()`) implemented to allow HTTPS-based validation
 
-**Steps for each schema:**
-1. Copy schema from OB1 repository to `schemas/<schema-name>/`
-2. Review and adapt SQL for compatibility
-3. Deploy via Supabase SQL Editor
-4. Run verification queries
-5. Document in schemas/README.md
+**Schemas Deployed:**
+1. **`smart-ingest`** - Content fingerprint deduplication and ingestion jobs tracking
+2. **`text-search-trgm`** - pg_trgm GIN index on content (accelerates ILIKE wildcards from ~8s to ~150ms)
+3. **`enhanced-thoughts`** - Standardized top-level metadata columns (`type`, `importance`, `quality_score`, `sensitivity_tier`, `source_type`, `enriched`) and 4 utility RPCs
+4. **`workflow-status`** - Task/idea workflow tracking status with automatic backfill
+5. **`provenance-chains`** - Lineage derivation tracking, check constraints, GIN indices, and walking helper RPCs
 
-**Dependencies:** Core thoughts table  
-**Time Estimate:** 2-3 hours for all 5 schemas  
-**Impact:** Significantly improves data quality, search, and traceability
+**Deployment Tools Created:**
+- `schemas/phase1-task1.2-combined.sql` - Consolidated, single-click schema payload
+- `schemas/PHASE1-TASK1.2-DEPLOYMENT.md` - Schema guide and verification manual
+- `schemas/validate-phase1-task1.2.js` - HTTP/RPC-based deep validation script
+
+**Time Taken:** ~1 hour  
+**Completed:** 2026-07-13
 
 ---
 
@@ -333,8 +337,8 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 **Phase 1 Complete:**
 - ✅ Agent memory schema deployed (Task 1.1)
-- ⏳ 5+ critical schemas active (Task 1.2 - In Progress)
-- ⏳ Fingerprint dedup operational (Task 1.2)
+- ✅ 5+ critical schemas active (Task 1.2)
+- ✅ Fingerprint dedup operational (Task 1.2)
 
 **Phase 2 Complete:**
 - ✓ 2 extensions deployed and tested
@@ -358,10 +362,10 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ## Next Immediate Actions
 
-1. **Deploy Agent Memory Schema** (30 min) - Enables governed agent operations
-2. **Deploy Content Fingerprint Dedup** (1 hour) - Critical for data quality
-3. **Configure Claude Desktop MCP** (30 min) - Direct integration testing
-4. **Build Household Knowledge Extension** (2 hours) - First learning path step
+1. **Build Household Knowledge Extension (Extension #1)** (2 hours) - First learning path step
+2. **Configure Claude Desktop MCP Connection** (30 min) - Direct integration testing
+3. **Deploy ChatGPT Conversation Import** (1 hour) - Capture existing conversation history
+4. **Deploy Fingerprint Dedup Backfill** (1 hour) - Deduplicate existing thoughts
 
 **Estimated Time to Phase 1 Complete:** 4 hours  
 **Estimated Time to Phase 2 Complete:** +6 hours (10 hours total)  

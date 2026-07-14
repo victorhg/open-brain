@@ -1,0 +1,12 @@
+{
+  "name": "open-brain-schemas-validation",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Validation harness for Open Brain schemas",
+  "scripts": {
+    "validate-1.2": "node validate-phase1-task1.2.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10"
+  }
+}
