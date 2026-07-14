@@ -41,7 +41,6 @@ const env = { ...fileEnv, ...process.env };
 const { 
   SUPABASE_URL, 
   SUPABASE_SERVICE_ROLE_KEY, 
-  OPENROUTER_API_KEY,
   LOCAL_LLM_BASE_URL,
   LOCAL_CHAT_MODEL
 } = env;
@@ -62,22 +61,22 @@ if (!conceptA || !conceptB) {
   process.exit(0);
 }
 
-// Generate Embedding via OpenRouter (using compatible 1536 dims standard)
+// Generate Embedding via Local LLM
 async function generateEmbedding(text) {
+  if (!LOCAL_LLM_BASE_URL || !env.LOCAL_EMBEDDING_MODEL) {
+    console.error('❌ LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL must be set in .env');
+    return null;
+  }
   try {
-    const url = 'https://openrouter.ai/api/v1/embeddings';
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings`;
+    const headers = { 'Content-Type': 'application/json' };
+    if (env.LOCAL_LLM_API) headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
+
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`
-      },
-      body: JSON.stringify({
-        model: 'openai/text-embedding-3-small',
-        input: text
-      }),
+      headers,
+      body: JSON.stringify({ model: env.LOCAL_EMBEDDING_MODEL, input: text }),
     });
-    
     if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const data = await res.json();
     return data.data[0].embedding;
@@ -107,20 +106,13 @@ async function searchConcept(concept, limit = 6) {
 
 // Ask Local LLM to analyze the relations
 async function analyzeRelation(conceptA, conceptB, resultsA, resultsB) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
+    return '⚠️ LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL must be set in .env for relational analysis.';
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
-    const url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
-      : 'https://openrouter.ai/api/v1/chat/completions';
-    
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
     const headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    if (env.LOCAL_LLM_API) headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
 
     const formatSource = (list) => list.map(t => `[Source Note: ${t.metadata?.title || 'Atomic note'}]\n${t.content}`).join('\n\n');
 
@@ -145,12 +137,12 @@ DIRECTIONS:
 4. Keep the answer structured, clear, and highly personalized.`;
 
     const body = {
-      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o-mini',
+      model: LOCAL_CHAT_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
     };
 
-    console.log(`🧠 Synthesizing relationship via ${isLocal ? 'Local Chat LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}...\n`);
+    console.log(`🧠 Synthesizing relationship via Local Chat LLM (${LOCAL_CHAT_MODEL})...\n`);
 
     const res = await fetch(url, {
       method: 'POST',

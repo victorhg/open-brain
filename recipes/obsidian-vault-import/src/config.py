@@ -25,21 +25,18 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = 2  # seconds, doubles each retry
 
 # Expected embedding vector dimensions — must match the pgvector index on the
-# thoughts table. Default is 1536 (OpenAI text-embedding-3-small).
-# If your local model outputs a different number of dimensions you must either
-# switch to a compatible model or recreate the database index.
-EMBEDDING_DIMENSIONS: int = int(os.environ.get("EMBEDDING_DIMENSIONS", "1536"))
+# thoughts table. Set to 2560 to match Qwen3-Embedding-4B (local model).
+# The HNSW index uses a halfvec(2560) cast to bypass the 2000-dim HNSW limit.
+EMBEDDING_DIMENSIONS: int = int(os.environ.get("EMBEDDING_DIMENSIONS", "2560"))
 
 # ── LLM configuration (mutable globals) ───────────────────────────────────
 # import-obsidian.py mutates these at startup after resolving the provider.
 # All other modules access them via `config.<VAR>` at call time.
 
-OPENROUTER_BASE_URL_DEFAULT = "https://openrouter.ai/api/v1"
-
-BASE_LLM_URL: str = os.environ.get("OPENROUTER_BASE_URL", OPENROUTER_BASE_URL_DEFAULT)
-EMBEDDING_MODEL: str = os.environ.get("OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small")
-LLM_MODEL: str = os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
-LLM_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "")
+BASE_LLM_URL: str = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
+EMBEDDING_MODEL: str = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
+LLM_MODEL: str = os.environ.get("LOCAL_CHAT_MODEL", "")
+LLM_API_KEY: str = os.environ.get("LOCAL_LLM_API", "")
 
 LOCAL_LLM_BASE_URL: str = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
 LOCAL_EMBEDDING_MODEL: str = os.environ.get("LOCAL_EMBEDDING_MODEL", "")

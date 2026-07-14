@@ -4,7 +4,7 @@
  * Open Brain Local CLI Query Utility
  * 
  * Queries your personal knowledge graph semantically from the command line.
- * Generates query embeddings using your local LLM (OMLX) or OpenRouter,
+ * Generates query embeddings using your local LLM,
  * and matches them against thoughts in your Supabase database.
  * 
  * Usage:
@@ -47,7 +47,6 @@ const env = { ...fileEnv, ...process.env };
 const { 
   SUPABASE_URL, 
   SUPABASE_SERVICE_ROLE_KEY, 
-  OPENROUTER_API_KEY,
   LOCAL_LLM_BASE_URL,
   LOCAL_EMBEDDING_MODEL,
   LOCAL_CHAT_MODEL
@@ -92,92 +91,40 @@ for (let i = 1; i < args.length; i++) {
 
 // --- Helpers ---
 
-// Generate Embedding via Local LLM or OpenRouter with Automatic Dimension Guard
+// Generate Embedding via Local LLM
 async function generateEmbedding(text) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_EMBEDDING_MODEL) {
+    console.error('❌ LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL must be set in .env');
+    return null;
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_EMBEDDING_MODEL;
-    let url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings` 
-      : 'https://openrouter.ai/api/v1/embeddings';
-    
-    let headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings`;
+    const headers = { 'Content-Type': 'application/json' };
+    if (env.LOCAL_LLM_API) headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
 
-    let modelName = isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small';
-    const body = {
-      model: modelName,
-      input: text
-    };
-    
-    let res = await fetch(url, {
+    const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify({ model: LOCAL_EMBEDDING_MODEL, input: text }),
     });
-    
-    if (!res.ok) {
-      throw new Error(`HTTP Error ${res.status}`);
-    }
-    
-    let data = await res.json();
-    let embedding = data.data[0].embedding;
-
-    // --- Automatic Dimension Guard ---
-    const DB_DIMENSIONS = 1536; // Your Supabase thoughts table pgvector dimension standard
-    if (isLocal && embedding.length !== DB_DIMENSIONS) {
-      console.warn(`⚠️  Dimension Mismatch: Local model '${modelName}' returned ${embedding.length} dimensions, but database expects ${DB_DIMENSIONS}.`);
-      console.log(`🔄 Automatically falling back to OpenRouter (text-embedding-3-small) to get a compatible 1536-dimension vector...\n`);
-      
-      // Re-run via OpenRouter
-      url = 'https://openrouter.ai/api/v1/embeddings';
-      headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`
-      };
-      
-      res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'openai/text-embedding-3-small',
-          input: text
-        }),
-      });
-
-      if (!res.ok) throw new Error(`Fallback HTTP Error ${res.status}`);
-      data = await res.json();
-      embedding = data.data[0].embedding;
-    }
-
-    return embedding;
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
+    const data = await res.json();
+    return data.data[0].embedding;
   } catch (err) {
     console.error(`❌ Failed to generate query embedding: ${err.message}`);
     return null;
   }
 }
 
-// Ask Local LLM / OpenRouter to synthesize an answer based on search context
+// Ask Local LLM to synthesize an answer based on search context
 async function synthesizeAnswer(question, contextThoughts) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
+    return '⚠️ LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL must be set in .env for answer synthesis.';
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
-    const url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
-      : 'https://openrouter.ai/api/v1/chat/completions';
-    
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
     const headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    if (env.LOCAL_LLM_API) headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
 
     const contextText = contextThoughts.map((t, i) => `[Source ${i+1}: ${t.metadata?.title || 'Unknown'}]\n${t.content}`).join('\n\n');
 
@@ -192,12 +139,12 @@ QUESTION:
 ${question}`;
 
     const body = {
-      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o-mini',
+      model: LOCAL_CHAT_MODEL,
       messages: [{ role: 'user', content: prompt }],
       temperature: 0.3,
     };
 
-    console.log(`\n🧠 Synthesizing local answer using ${isLocal ? 'Local Chat LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}...\n`);
+    console.log(`\n🧠 Synthesizing local answer using Local Chat LLM (${LOCAL_CHAT_MODEL})...\n`);
 
     const res = await fetch(url, {
       method: 'POST',

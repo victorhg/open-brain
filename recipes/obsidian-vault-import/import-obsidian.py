@@ -3,7 +3,7 @@
 import-obsidian.py — Import an Obsidian vault into Open Brain as searchable thoughts.
 
 Parses markdown files with frontmatter, chunks long notes into atomic thoughts,
-generates embeddings via a local or OpenRouter LLM, and inserts into Supabase.
+generates embeddings via the local LLM, and inserts into Supabase.
 
 ── Standard usage ────────────────────────────────────────────────────────────
 
@@ -16,7 +16,6 @@ generates embeddings via a local or OpenRouter LLM, and inserts into Supabase.
   # Common options
   python import-obsidian.py /path/to/vault --limit 20 --verbose
   python import-obsidian.py /path/to/vault --no-llm          # heading splits only
-  python import-obsidian.py /path/to/vault --use-openrouter   # use OpenRouter instead of local LLM
 
 ── Two-phase mode (recommended for large vaults) ─────────────────────────────
 
@@ -105,34 +104,20 @@ def _load_env(script_dir: Path):
 
 
 def _configure_provider(args) -> None:
-    """Resolve the LLM provider and mutate config module globals accordingly.
+    """Resolve the local LLM provider and mutate config module globals.
 
-    Default: local LLM (LOCAL_LLM_BASE_URL must be set in .env).
-    Pass --use-openrouter to route through OpenRouter instead.
+    Requires LOCAL_LLM_BASE_URL to be set in .env.
     """
-    if args.use_openrouter:
-        print("INFO: Using OpenRouter configuration (--use-openrouter).")
-        config.BASE_LLM_URL = os.environ.get(
-            "OPENROUTER_BASE_URL", config.OPENROUTER_BASE_URL_DEFAULT)
-        config.EMBEDDING_MODEL = os.environ.get(
-            "OPENROUTER_EMBEDDING_MODEL", "openai/text-embedding-3-small")
-        config.LLM_MODEL = os.environ.get("OPENROUTER_LLM_MODEL", "openai/gpt-4o-mini")
-        config.LLM_API_KEY = os.environ.get("OPENROUTER_API_KEY", "")
-        if not config.LLM_API_KEY:
-            print("ERROR: --use-openrouter requires OPENROUTER_API_KEY to be set in .env.",
-                  file=sys.stderr)
-            sys.exit(1)
-    else:
-        local_url = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
-        if not local_url:
-            print("ERROR: No local LLM configured. Set LOCAL_LLM_BASE_URL in .env, "
-                  "or pass --use-openrouter.", file=sys.stderr)
-            sys.exit(1)
-        print("INFO: Using Local LLM configuration (default).")
-        config.BASE_LLM_URL = local_url
-        config.EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
-        config.LLM_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
-        config.LLM_API_KEY = os.environ.get("LOCAL_LLM_API", "")
+    local_url = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
+    if not local_url:
+        print("ERROR: No local LLM configured. Set LOCAL_LLM_BASE_URL in .env.",
+              file=sys.stderr)
+        sys.exit(1)
+    print("INFO: Using Local LLM configuration.")
+    config.BASE_LLM_URL = local_url
+    config.EMBEDDING_MODEL = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
+    config.LLM_MODEL = os.environ.get("LOCAL_CHAT_MODEL", "")
+    config.LLM_API_KEY = os.environ.get("LOCAL_LLM_API", "")
 
 
 def _run_test_llm() -> None:
@@ -229,11 +214,7 @@ def _preflight(supabase_url: str, supabase_key: str, no_embed: bool) -> None:
             print("Error: embedding dimension mismatch.", file=sys.stderr)
             print(f"  Model produces {len(test_embedding)}-dimensional vectors.", file=sys.stderr)
             print(f"  Database expects {config.EMBEDDING_DIMENSIONS} dimensions.", file=sys.stderr)
-            print(f"  Fix: set LOCAL_EMBEDDING_MODEL in .env to a {config.EMBEDDING_DIMENSIONS}-dim model,",
-                  file=sys.stderr)
-            print(f"       or set EMBEDDING_DIMENSIONS={len(test_embedding)} if you recreated the DB index,",
-                  file=sys.stderr)
-            print(  "       or use --use-openrouter (text-embedding-3-small = 1536 dims).",
+            print(f"  Fix: set EMBEDDING_DIMENSIONS={len(test_embedding)} in .env if you recreated the DB index.",
                   file=sys.stderr)
             sys.exit(1)
 
@@ -323,8 +304,6 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="Test the embedding endpoint and assert the returned dimension matches EMBEDDING_DIMENSIONS, then exit")
     parser.add_argument("--report", action="store_true",
                         help="Generate a markdown summary report")
-    parser.add_argument("--use-openrouter", action="store_true",
-                        help="Route LLM and embedding calls through OpenRouter instead of the local LLM")
     # Two-phase operation
     parser.add_argument("--parse-only", action="store_true",
                         help="Parse+chunk the vault and save a cache file; upload later with --load-from")
