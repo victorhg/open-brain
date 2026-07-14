@@ -38,6 +38,12 @@ EMBEDDING_MODEL: str = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
 LLM_MODEL: str = os.environ.get("LOCAL_CHAT_MODEL", "")
 LLM_API_KEY: str = os.environ.get("LOCAL_LLM_API", "")
 
+# Optional: a lighter model used exclusively for chunking/distillation.
+# If set, llm_distill() uses this instead of LLM_MODEL, keeping the large
+# chat model out of memory during the parse phase.
+# Example .env entry:  LOCAL_CHUNK_MODEL=Qwen2.5-7B-Instruct-4bit
+LLM_CHUNK_MODEL: str = os.environ.get("LOCAL_CHUNK_MODEL", "")
+
 LOCAL_LLM_BASE_URL: str = os.environ.get("LOCAL_LLM_BASE_URL", "").rstrip('/')
 LOCAL_EMBEDDING_MODEL: str = os.environ.get("LOCAL_EMBEDDING_MODEL", "")
 LOCAL_CHAT_MODEL: str = os.environ.get("LOCAL_CHAT_MODEL", "")

@@ -112,24 +112,30 @@ def generate_embedding(text: str, api_key: str) -> list[float] | None:
 
 
 def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
-    """Use the configured LLM to distill a long section into 1-3 atomic thoughts."""
-    if len(content) > 8000:
-        content = content[:8000] + "\n[... truncated]"
+    """Use the configured LLM to distill a long section into 1-3 atomic thoughts.
+
+    Uses config.LLM_CHUNK_MODEL when set (recommended: a small 3B-7B model that
+    fits in memory alongside the embedding model). Falls back to config.LLM_MODEL.
+    """
+    # Prefer a dedicated small chunking model to avoid loading the large chat model.
+    model = config.LLM_CHUNK_MODEL or config.LLM_MODEL
+    if len(content) > 4000:
+        content = content[:4000] + "\n[... truncated]"
 
     prompt = config.SUMMARIZATION_PROMPT.format(title=title, content=content)
     messages = [{"role": "user", "content": prompt}]
 
     for attempt in range(config.MAX_RETRIES):
         try:
-            if config.BASE_LLM_URL and config.LLM_MODEL:
+            if config.BASE_LLM_URL and model:
                 data = _local_request("chat/completions", {
-                    "model": config.LLM_MODEL,
+                    "model": model,
                     "messages": messages,
                     "temperature": 0.3,
                 })
             else:
                 data = _openrouter_request("chat/completions", {
-                    "model": config.LLM_MODEL,
+                    "model": model,
                     "messages": messages,
                     "temperature": 0.3,
                     "response_format": {"type": "json_object"},
