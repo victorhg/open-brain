@@ -1,0 +1,12 @@
+{
+  "name": "open-brain-personal",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Open Brain personal context workspace",
+  "scripts": {
+    "query": "node bin/query-brain.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10"
+  }
+}

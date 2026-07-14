@@ -8,6 +8,7 @@
     "watch": "node watcher.js"
   },
   "dependencies": {
-    "chokidar": "^3.6.0"
+    "chokidar": "^3.6.0",
+    "@supabase/supabase-js": "^2.47.10"
   }
 }

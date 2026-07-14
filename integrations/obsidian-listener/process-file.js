@@ -32,7 +32,7 @@ if (!existsSync(envPath)) {
 }
 
 const envContent = readFileSync(envPath, 'utf-8');
-const env = Object.fromEntries(
+const fileEnv = Object.fromEntries(
   envContent.split('\n')
     .filter(line => line && !line.startsWith('#'))
     .map(line => {
@@ -41,10 +41,20 @@ const env = Object.fromEntries(
     })
 );
 
-const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENROUTER_API_KEY } = env;
+// Allow process.env to override .env file variables
+const env = { ...fileEnv, ...process.env };
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !OPENROUTER_API_KEY) {
-  console.error('❌ Error: Missing required environment keys in .env');
+const { 
+  SUPABASE_URL, 
+  SUPABASE_SERVICE_ROLE_KEY, 
+  OPENROUTER_API_KEY,
+  LOCAL_LLM_BASE_URL,
+  LOCAL_EMBEDDING_MODEL,
+  LOCAL_CHAT_MODEL
+} = env;
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('❌ Error: Missing required Supabase credentials in .env');
   process.exit(1);
 }
 
@@ -58,19 +68,34 @@ function computeFingerprint(text) {
   return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
-// Generate Embedding via OpenRouter
+// Generate Embedding via Local LLM or OpenRouter
 async function generateEmbedding(text) {
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/embeddings', {
+    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_EMBEDDING_MODEL;
+    const url = isLocal 
+      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings` 
+      : 'https://openrouter.ai/api/v1/embeddings';
+    
+    const headers = { 'Content-Type': 'application/json' };
+    if (isLocal) {
+      if (env.LOCAL_LLM_API) {
+        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
+      }
+    } else {
+      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
+    }
+
+    const body = {
+      model: isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small',
+      input: text
+    };
+
+    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + LOCAL_EMBEDDING_MODEL + ')' : 'OpenRouter'}`);
+    
+    const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/text-embedding-3-small',
-        input: text
-      }),
+      headers,
+      body: JSON.stringify(body),
     });
     
     if (!res.ok) {
@@ -85,21 +110,29 @@ async function generateEmbedding(text) {
   }
 }
 
-// Extract LLM Metadata from thought chunk
+// Extract LLM Metadata from thought chunk via Local LLM or OpenRouter
 async function extractMetadata(text) {
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: `You extract metadata from thoughts. Return ONLY valid JSON, no markdown formatting or backticks.
+    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
+    const url = isLocal 
+      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
+      : 'https://openrouter.ai/api/v1/chat/completions';
+    
+    const headers = { 'Content-Type': 'application/json' };
+    if (isLocal) {
+      if (env.LOCAL_LLM_API) {
+        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
+      }
+    } else {
+      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
+    }
+
+    const body = {
+      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You extract metadata from thoughts. Return ONLY valid JSON, no markdown formatting or backticks.
 {
   "type": "decision" | "person_note" | "insight" | "meeting_note" | "idea" | "task" | "reference" | "journal",
   "category": "career" | "product" | "health" | "finance" | "relationships" | "general",
@@ -107,18 +140,26 @@ async function extractMetadata(text) {
   "topics": ["topic1", "topic2"],
   "importance": 1 to 5 (integer, default 3)
 }`
-          },
-          { role: 'user', content: text }
-        ],
-        temperature: 0,
-      }),
+        },
+        { role: 'user', content: text }
+      ],
+      temperature: 0,
+    };
+
+    console.log(`      [METADATA] Analyzing via ${isLocal ? 'Local LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}`);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
     });
     
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const data = await res.json();
     const raw = data.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     return JSON.parse(raw);
-  } catch {
+  } catch (err) {
+    console.warn(`      ⚠️ Metadata analysis failed (${err.message}). Using fallback schema.`);
     return { type: 'journal', category: 'general', people: [], topics: [], importance: 3 };
   }
 }
@@ -306,14 +347,17 @@ async function processFile(filePath) {
       continue;
     }
 
-    const thoughtId = result.id;
-    console.log(`      ✅ Thought Upserted (UUID: ${thoughtId})`);
-
     // Inject embedding directly (upsert_thought handles fingerprinting, but not embedding vector directly in conflict updates)
-    await supabase
+    const { error: updateErr } = await supabase
       .from('thoughts')
       .update({ embedding })
       .eq('id', thoughtId);
+
+    if (updateErr) {
+      console.warn(`      ⚠️ Failed to save embedding vector: ${updateErr.message}`);
+    } else {
+      console.log(`      ✅ Thought Upserted (UUID: ${thoughtId})`);
+    }
 
     // Build Provenance Chains / Derivation Chains if we found wikilink parent IDs!
     if (parentIds.length > 0) {
@@ -342,18 +386,26 @@ async function runGoldPanningFlow(fileData, filePath) {
   console.log('   🧠 Step 1: Running Phase 1 (Extracting idea threads)...');
   
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'openai/gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `You are the Open Brain Panning Engine. Your job is to read raw voice transcripts, meeting notes, or stream-of-consciousness brain dumps, and extract every single high-signal idea, action item, observation, lesson, or decision thread.
+    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
+    const url = isLocal 
+      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
+      : 'https://openrouter.ai/api/v1/chat/completions';
+    
+    const headers = { 'Content-Type': 'application/json' };
+    if (isLocal) {
+      if (env.LOCAL_LLM_API) {
+        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
+      }
+    } else {
+      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
+    }
+
+    const body = {
+      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are the Open Brain Panning Engine. Your job is to read raw voice transcripts, meeting notes, or stream-of-consciousness brain dumps, and extract every single high-signal idea, action item, observation, lesson, or decision thread.
 For each thread found, return a JSON object inside an array:
 {
   "idea": "A clear, concise, self-contained summary of the idea thread",
@@ -362,14 +414,21 @@ For each thread found, return a JSON object inside an array:
   "type": "idea" | "task" | "lesson" | "decision" | "reference"
 }
 Return ONLY a valid JSON array, no markdown or wrapper code.`
-          },
-          { role: 'user', content: content }
-        ],
-        temperature: 0.1,
-      }),
+        },
+        { role: 'user', content: content }
+      ],
+      temperature: 0.1,
+    };
+
+    console.log(`      [PANNING] Processing via ${isLocal ? 'Local Chat LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}`);
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
     });
 
-    if (!res.ok) throw new Error();
+    if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
     const data = await res.json();
     const raw = data.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     const threads = JSON.parse(raw);
@@ -434,14 +493,18 @@ Return ONLY a valid JSON array, no markdown or wrapper code.`
 
       if (!threadErr && threadRes) {
         // Link embedding and provenance chains
-        await supabase.from('thoughts').update({
+        const { error: updateErr } = await supabase.from('thoughts').update({
           embedding: threadEmbedding,
           derived_from: [rawSourceId],
           derivation_layer: 'derived',
           derivation_method: 'synthesis'
         }).eq('id', threadRes.id);
         
-        console.log(`     ✅ Captured thread: "${thread.idea.substring(0, 40)}..."`);
+        if (updateErr) {
+          console.warn(`     ⚠️ Failed to save thread embedding: ${updateErr.message}`);
+        } else {
+          console.log(`     ✅ Captured thread: "${thread.idea.substring(0, 40)}..."`);
+        }
       }
     }
     

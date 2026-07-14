@@ -98,7 +98,37 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ---
 
-## Phase 2: First Extension - Learning Path Start (Priority: High)
+## Phase 1.5: Local Testing & Validation (Priority: Critical)
+
+### Task 1.5.1: End-to-End Obsidian Live Listener Testing
+**Objective:** Verify the real-time file watcher and Obsidian triggers on local markdown edits.
+
+**Steps:**
+1. Create a dummy test file `Brain Dump E2E.md` in Obsidian or the workspace.
+2. Tag it with `#brain-dump` and add raw unstructured content (tasks, meetings, etc.).
+3. Run the live listener (`integrations/obsidian-listener/process-file.js`) to parse and sync it.
+4. Verify that the original is captured, and the Gold Panning Engine correctly extracts the "gold nuggets" and links them via first-class provenance chains!
+
+**Status:** IN PROGRESS  
+**Impact:** Confirms the complete ingestion and extraction cycle works perfectly on local notes.
+
+---
+
+### Task 1.5.2: Local Semantic Querying & Knowledge Retrieval
+**Objective:** Query your personal brain and synthesize knowledge locally without proprietary clients.
+
+**Steps:**
+1. Build a command-line query CLI `bin/query-brain.js` supporting local LLM embeddings and completions.
+2. Query the database using semantic search vectors.
+3. Test local synthesis (`--answer` flag) using your local Chat LLM (gemma-4-E4B-it-MLX-6bit).
+4. Document local search usage in the main README.md.
+
+**Status:** COMPLETE ✓ (CLI Utility built, supports local embedding and chat configurations)  
+**Impact:** Enables fully offline, private semantic searches and context-aware synthesis of your knowledge.
+
+---
+
+## Phase 2: First Extension - Learning Path Start (Priority: Later / Deferred)
 
 ### Task 2.1: Household Knowledge Base (Extension #1)
 **Objective:** First extension in the OB1 learning path - store home facts for instant recall.
@@ -178,21 +208,20 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ---
 
-## Phase 4: MCP Client Connectivity (Priority: High)
+## Phase 4: local LLM Integration & Querying (Priority: High)
 
-### Task 4.1: Configure Claude Desktop MCP Connection
-**Objective:** Enable Claude Desktop to access Open Brain via MCP.
+### Task 4.1: CLI & Local Client Integrations
+**Objective:** Connect local query tools and terminal interfaces to Open Brain.
+
+**Note:** Claude Desktop integration has been removed from the immediate roadmap (running on local LLMs only).
 
 **Steps:**
-1. Review `primitives/remote-mcp/README.md`
-2. Add MCP configuration to Claude Desktop config file
-3. Test connection with `search_thoughts` and `capture_thought`
-4. Document connection string format
-5. Add troubleshooting section
+1. Test semantic search CLI against the 3,911 existing thoughts.
+2. Ensure local embeddings from `Qwen3-Embedding` match database expectations.
+3. Document terminal workflows for querying your personal brain.
 
-**Dependencies:** Core MCP function  
-**Time Estimate:** 30 minutes  
-**Impact:** Direct Claude Desktop integration
+**Status:** READY  
+**Impact:** Offline-first AI assistance using your own private hardware.
 
 ---
 
@@ -362,14 +391,12 @@ This document outlines the implementation roadmap for completing the OpenBrain a
 
 ## Next Immediate Actions
 
-1. **Build Household Knowledge Extension (Extension #1)** (2 hours) - First learning path step
-2. **Configure Claude Desktop MCP Connection** (30 min) - Direct integration testing
-3. **Deploy ChatGPT Conversation Import** (1 hour) - Capture existing conversation history
-4. **Deploy Fingerprint Dedup Backfill** (1 hour) - Deduplicate existing thoughts
+1. **Test End-to-End Process with Obsidian** (30 min) - Edit a test file and execute the sync engine.
+2. **Local Semantic Querying** (15 min) - Query your 3,911 thoughts using `query-brain.js`.
+3. **Selective Historical Panning** (1 hour) - Run gold panning on specific historical transcripts.
 
-**Estimated Time to Phase 1 Complete:** 4 hours  
-**Estimated Time to Phase 2 Complete:** +6 hours (10 hours total)  
-**Estimated Time to Full System:** 25-30 hours
+**Estimated Time to Complete E2E Testing:** 45 minutes  
+**Estimated Time to Full System:** Local-LLM oriented, offline-first.
 
 ---
 
