@@ -12,7 +12,9 @@
  * 3. Atomic Chunking: Splits large notes at heading (##) boundaries to create clean thoughts.
  * 4. Provenance Chain Building: Translates [[wikilinks]] to UUID-based derivation chains.
  * 5. Panning for Gold: Automatically detects '#brain-dump' or '#transcript' and triggers thread analysis.
- * 6. Embedding Generation: Calls OpenRouter API to generate embeddings.
+ * 6. Embedding Generation: Calls the local LLM embedding endpoint (LOCAL_LLM_BASE_URL).
+ *    Dimension validation is driven by EMBEDDING_DIMENSIONS from .env — no hardcoded values,
+ *    no silent fallback to OpenRouter. Mismatch = loud error.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -50,8 +52,15 @@ const {
   OPENROUTER_API_KEY,
   LOCAL_LLM_BASE_URL,
   LOCAL_EMBEDDING_MODEL,
-  LOCAL_CHAT_MODEL
+  LOCAL_CHAT_MODEL,
+  LOCAL_LLM_API,
+  EMBEDDING_DIMENSIONS
 } = env;
+
+// Canonical embedding dimension — must match the pgvector index on the thoughts table.
+// Driven by EMBEDDING_DIMENSIONS in .env (e.g. 2560 for Qwen3-Embedding-4B).
+// Set the same value in your Supabase schema and never mix models.
+const DB_DIMENSIONS = parseInt(EMBEDDING_DIMENSIONS || '2560', 10);
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('❌ Error: Missing required Supabase credentials in .env');
@@ -76,61 +85,41 @@ async function generateEmbedding(text) {
       ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings` 
       : 'https://openrouter.ai/api/v1/embeddings';
     
-    let headers = { 'Content-Type': 'application/json' };
+    const headers = { 'Content-Type': 'application/json' };
     if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
+      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
     } else {
       headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
     }
 
-    let modelName = isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small';
+    const modelName = isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small';
     const body = {
       model: modelName,
       input: text
     };
 
-    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + modelName + ')' : 'OpenRouter'}`);
-    
-    let res = await fetch(url, {
+    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + modelName + ')' : 'OpenRouter'} — expecting ${DB_DIMENSIONS} dims`);
+
+    const res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
-    
+
     if (!res.ok) {
       throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
     }
-    
-    let data = await res.json();
-    let embedding = data.data[0].embedding;
 
-    // --- Automatic Dimension Guard ---
-    const DB_DIMENSIONS = 1536; // Your Supabase thoughts table pgvector dimension standard
-    if (isLocal && embedding.length !== DB_DIMENSIONS) {
-      console.warn(`      ⚠️  Dimension Mismatch: Local model '${modelName}' returned ${embedding.length} dimensions, but database expects ${DB_DIMENSIONS}.`);
-      console.log(`      🔄 Automatically falling back to OpenRouter (text-embedding-3-small) to get a compatible 1536-dimension vector...`);
-      
-      // Re-run via OpenRouter
-      url = 'https://openrouter.ai/api/v1/embeddings';
-      headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`
-      };
-      
-      res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: 'openai/text-embedding-3-small',
-          input: text
-        }),
-      });
+    const data = await res.json();
+    const embedding = data.data[0].embedding;
 
-      if (!res.ok) throw new Error(`Fallback HTTP Error ${res.status}`);
-      data = await res.json();
-      embedding = data.data[0].embedding;
+    // --- Dimension Guard (fail loudly — no silent cloud fallback) ---
+    if (embedding.length !== DB_DIMENSIONS) {
+      throw new Error(
+        `Dimension mismatch: model '${modelName}' returned ${embedding.length} dims, ` +
+        `but EMBEDDING_DIMENSIONS=${DB_DIMENSIONS}. ` +
+        `Update EMBEDDING_DIMENSIONS in .env or switch LOCAL_EMBEDDING_MODEL to a compatible model.`
+      );
     }
 
     return embedding;
@@ -150,9 +139,7 @@ async function extractMetadata(text) {
     
     const headers = { 'Content-Type': 'application/json' };
     if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
+      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
     } else {
       headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
     }
@@ -423,9 +410,7 @@ async function runGoldPanningFlow(fileData, filePath) {
     
     const headers = { 'Content-Type': 'application/json' };
     if (isLocal) {
-      if (env.LOCAL_LLM_API) {
-        headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
-      }
+      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
     } else {
       headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
     }

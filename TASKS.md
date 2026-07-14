@@ -44,7 +44,7 @@ See `analysis-openbrain-viability.md` for the full viability analysis that produ
 
 ### ❌ Missing (priority order)
 - **Query Engine** — no grounding prompt, no context assembler, no 3-stage retrieval
-- **Embedding standardisation** — existing 3,911 thoughts may use a cloud model; local `mxbai-embed-large` not yet canonical
+- **Embedding consistency** — confirm all thoughts share the same `LOCAL_EMBEDDING_MODEL` / `EMBEDDING_DIMENSIONS` (Task A.1)
 - **Knowledge Graph** — no `graph_edges` table, no entity extraction, no graph traversal in queries
 - **Wiki Synthesis Layer** — no `wiki_pages` table, no post-ingest synthesis, no wiki lookup in queries
 - **Accumulated Learnings** — no `learnings` table, no cross-session insight accumulation
@@ -93,47 +93,71 @@ Semantic search against 3,911 thoughts confirmed working.
 
 ---
 
-### Task A.1: Standardise Embedding Model → `mxbai-embed-large`
+### Task A.1: Verify and Enforce Embedding Model Consistency
 
-**Objective:** Establish a single canonical local embedding model for all thoughts, present and future.
+**Objective:** Ensure every thought — past and future — is embedded with the single model defined
+by `LOCAL_EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` in `.env`. Mixed models in the same
+vector column produce meaningless similarity scores.
 
-**Why:** The existing 3,911 thoughts were likely embedded via OpenRouter (cloud). ArchDoc mandates
-`mxbai-embed-large` (1024 dims, local Ollama). Mixing models in the same vector column produces
-meaningless similarity scores — this is the **highest-risk data integrity issue** in the project.
+**Ground truth (from code):**
+
+| Variable | Current value | Verified in |
+|---|---|---|
+| `LOCAL_EMBEDDING_MODEL` | `Qwen3-Embedding-4B-4bit-DWQ` | `.env` |
+| `EMBEDDING_DIMENSIONS` | `2560` | `.env` |
+| `LOCAL_LLM_BASE_URL` | `http://127.0.0.1:8000/v1` (OpenAI-compat) | `.env` |
+| `bin/query-brain.js` | reads `LOCAL_EMBEDDING_MODEL` ✅ | code |
+| `recipes/obsidian-vault-import` | reads both env vars, validates on preflight ✅ | `src/config.py` |
+| `integrations/obsidian-listener` | reads `EMBEDDING_DIMENSIONS` from env ✅ | fixed this session |
 
 **Steps:**
-1. Check current embedding dimensions in the `thoughts` table:
+1. Confirm all stored thoughts share the same dimension:
    ```sql
-   SELECT pg_column_size(embedding), array_length(embedding::real[], 1)
-   FROM thoughts LIMIT 5;
+   SELECT array_length(embedding::real[], 1) AS dims, count(*)
+   FROM thoughts
+   WHERE embedding IS NOT NULL
+   GROUP BY 1
+   ORDER BY 1;
    ```
-2. Pull the model locally:
+   Expected: a single row with `dims = 2560` (matching `EMBEDDING_DIMENSIONS`).
+   Multiple rows = thoughts embedded with different models → run the re-embed in Step 3.
+
+2. Run the obsidian-vault-import preflight to confirm the live model output matches the DB:
    ```bash
-   ollama pull mxbai-embed-large
+   cd recipes/obsidian-vault-import
+   python import-obsidian.py --test-embeddings
+   # → SUCCESS: received 2560-dimensional vector — matches EMBEDDING_DIMENSIONS.
    ```
-3. If dimension ≠ 1024: add a migration to alter the `embedding` column to `vector(1024)`.
-   > ⚠️ This drops existing vectors — re-embed all thoughts in the next step.
-4. Write `bin/reembed-thoughts.js`:
+
+3. **Only if Step 1 shows mixed dims:** write `bin/reembed-thoughts.js`:
+   - Read `LOCAL_LLM_BASE_URL`, `LOCAL_EMBEDDING_MODEL`, `LOCAL_LLM_API`, `EMBEDDING_DIMENSIONS`
+     from `.env` — no hardcoded model names or dimensions anywhere
    - Fetch all thoughts in batches of 50
-   - Call `POST http://localhost:11434/api/embeddings` with `model: "mxbai-embed-large"`
-   - Upsert the new `embedding` value for each thought
-   - Log progress to stdout; skip thoughts already at 1024-dim
-5. Run the script against all 3,911 thoughts.
-6. Update `.env` to set `LOCAL_EMBEDDING_MODEL=mxbai-embed-large`
-7. Update `bin/query-brain.js` to use `LOCAL_EMBEDDING_MODEL` from env (already wired, just verify)
-8. Update `integrations/obsidian-listener` to use `mxbai-embed-large` for all new ingest.
+   - Call `POST {LOCAL_LLM_BASE_URL}/embeddings` with `{ model: LOCAL_EMBEDDING_MODEL, input: content }`
+   - Assert `embedding.length === parseInt(EMBEDDING_DIMENSIONS)` — throw on mismatch, never silently swap models
+   - Upsert corrected embeddings; skip thoughts already at the correct dimension
+   ```bash
+   node bin/reembed-thoughts.js --dry-run   # preview counts, no writes
+   node bin/reembed-thoughts.js             # full re-embed
+   ```
+
+4. Rule: if `LOCAL_EMBEDDING_MODEL` or `EMBEDDING_DIMENSIONS` ever changes in `.env`,
+   re-run Step 3 before issuing any new queries. Model and DB column must always match.
 
 **Acceptance Test:**
 ```bash
+# Confirm single dimension in DB
+psql $DATABASE_URL -c   "SELECT array_length(embedding::real[], 1) AS dims, count(*) FROM thoughts WHERE embedding IS NOT NULL GROUP BY 1;"
+# → exactly one row, dims = value of EMBEDDING_DIMENSIONS
+
+# Confirm query-brain uses the local model end-to-end
 node bin/query-brain.js "what did I write about deep work?" --limit 5
-# → returns semantically correct chunks with cosine similarity > 0.25
-# → all embeddings generated locally, no OpenRouter call made
+# → semantically correct chunks, similarity > 0.25, no cloud call made
 ```
 
-**Dependencies:** Ollama running locally  
-**Time Estimate:** 2–3 hours (mostly re-embed runtime)  
-**Files:** `bin/reembed-thoughts.js` (new), `bin/query-brain.js` (update), `.env` (update)
-
+**Dependencies:** Local LLM server running at `LOCAL_LLM_BASE_URL`  
+**Time Estimate:** 30 min to verify — 2–3 hours only if full re-embed is needed  
+**Files:** `bin/reembed-thoughts.js` (new, only if re-embed is needed)
 ---
 
 ### Task A.2: Add Grounding Prompt to `query-brain.js`
@@ -175,7 +199,7 @@ node bin/query-brain.js "what are my goals for the masters thesis?" --answer
 node bin/query-brain.js "what is the population of Mars in 2150?" --answer --strict
 ```
 
-**Dependencies:** Task A.1 (embedding standardised)  
+**Dependencies:** Task A.1 (embedding consistency verified)  
 **Time Estimate:** 1 hour  
 **Files:** `bin/query-brain.js` (update)
 
@@ -416,7 +440,7 @@ node bin/query-brain.js "walk me through the dependencies from the last Kim meet
      content      TEXT NOT NULL,          -- LLM-written markdown
      page_type    TEXT NOT NULL CHECK (page_type IN ('entity', 'concept', 'synthesis', 'answer')),
      source_thought_ids UUID[] DEFAULT '{}',
-     embedding    vector(1024),           -- mxbai-embed-large, for wiki-level semantic search
+     embedding    vector(2560),           -- dimension must match EMBEDDING_DIMENSIONS in .env
      created_at   TIMESTAMPTZ DEFAULT NOW(),
      updated_at   TIMESTAMPTZ DEFAULT NOW()
    );
@@ -432,7 +456,7 @@ node bin/query-brain.js "walk me through the dependencies from the last Kim meet
 2. Create `schemas/wiki-pages/metadata.json`.
 3. Deploy via Supabase Dashboard.
 
-**Dependencies:** Task A.1 (mxbai-embed-large canonical)  
+**Dependencies:** Task A.1 (embedding consistency verified)  
 **Time Estimate:** 30 minutes  
 **Files:** `schemas/wiki-pages/schema.sql` (new), `schemas/wiki-pages/metadata.json` (new)
 
@@ -453,7 +477,7 @@ for populating `wiki_pages`, adapted for local Ollama instead of OpenRouter.
 3. Adapt `wiki-synthesis`:
    - Replace OpenRouter with Ollama (`LOCAL_CHAT_MODEL` from `.env`)
    - Target the `wiki_pages` table (slug, content, page_type = 'synthesis')
-   - Embed generated pages with `mxbai-embed-large` before insert
+   - Embed generated pages via `LOCAL_LLM_BASE_URL` / `LOCAL_EMBEDDING_MODEL` before insert
 4. Adapt `entity-wiki`:
    - Extract top entities from `graph_edges` (by edge frequency)
    - For each entity, fetch all related thought chunks (via `source_thought_id`)
@@ -473,7 +497,7 @@ for populating `wiki_pages`, adapted for local Ollama instead of OpenRouter.
 node bin/build-wiki.js --type entity --limit 20
 # → 20 rows in wiki_pages with page_type='entity'
 # → content is coherent markdown with cross-references to other entities
-# → embeddings populated (1024-dim)
+# → embeddings populated (dims = EMBEDDING_DIMENSIONS, e.g. 2560)
 ```
 
 **Dependencies:** Tasks C.1, B.3 (entities in graph_edges), A.1  
@@ -530,7 +554,7 @@ synthesised wiki pages (Stage 3).
 2. Add the `match_wiki_pages` RPC function to `schemas/wiki-pages/schema.sql`:
    ```sql
    CREATE OR REPLACE FUNCTION match_wiki_pages(
-     query_embedding vector(1024),
+     query_embedding vector(2560),           -- must match EMBEDDING_DIMENSIONS in .env
      match_threshold float DEFAULT 0.3,
      match_count int DEFAULT 3
    )
@@ -740,7 +764,7 @@ Copy from `NateBJones-Projects/OB1/extensions/home-maintenance/`, deploy, add MC
 
 ### Task 3.1: Deploy ChatGPT Conversation Import
 Import historical ChatGPT conversations. Copy recipe from `NateBJones-Projects/OB1/recipes/chatgpt-conversation-import/`.
-Configure to use local embedding model (`mxbai-embed-large`) after Task A.1.
+Configure to use `LOCAL_EMBEDDING_MODEL` / `LOCAL_LLM_BASE_URL` (set in `.env`); run after Task A.1 confirms embedding consistency.
 **Dependencies:** Task A.1 | **Time Estimate:** 1 hour
 
 ### Task 3.2: Deploy Fingerprint Dedup Backfill
@@ -815,7 +839,7 @@ Proactive briefings, habits, health from `recipes/life-engine/`.
 ## Success Metrics
 
 ### Phase A Complete (Query Engine)
-- ✓ All 3,911 thoughts re-embedded with `mxbai-embed-large` (1024 dims)
+- ✓ All thoughts share a single embedding model (`LOCAL_EMBEDDING_MODEL`) at consistent dimensions (`EMBEDDING_DIMENSIONS`)
 - ✓ Every `--answer` response cites source note titles in `[brackets]`
 - ✓ `lib/context-assembler.js` in place with stub hooks for graph + wiki
 - ✓ No hallucination on out-of-context queries (returns "I don't have enough information")
@@ -851,7 +875,7 @@ Proactive briefings, habits, health from `recipes/life-engine/`.
 ## Immediate Next Actions (Phase A)
 
 1. **Check current embedding dimensions** (5 min) — run the SQL in Task A.1 Step 1 to confirm whether a re-embed is needed.
-2. **Pull `mxbai-embed-large`** (10 min) — `ollama pull mxbai-embed-large`
+2. **Verify local LLM server** (5 min) — confirm `LOCAL_LLM_BASE_URL` is reachable and `LOCAL_EMBEDDING_MODEL` is loaded
 3. **Write `bin/reembed-thoughts.js`** (2–3 hours) — Task A.1
 4. **Add grounding prompt** (1 hour) — Task A.2
 5. **Refactor to `lib/context-assembler.js`** (1.5 hours) — Task A.3
@@ -872,7 +896,7 @@ For the full design rationale behind Phases A–D, see:
 Query Pipeline (target state after Phases A–D):
 ─────────────────────────────────────────────────────
 User query
-  → embed with mxbai-embed-large (Ollama, local)
+  → embed with LOCAL_EMBEDDING_MODEL via LOCAL_LLM_BASE_URL (local, OpenAI-compat)
   → Stage 1: semantic search → top-6 thoughts (pgvector cosine)
   → Stage 2: graph traversal → 1-hop neighbors via graph_edges
   → Stage 3: wiki lookup → matching wiki_pages (entity + synthesis)
