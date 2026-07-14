@@ -68,15 +68,15 @@ function computeFingerprint(text) {
   return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
-// Generate Embedding via Local LLM or OpenRouter
+// Generate Embedding via Local LLM or OpenRouter with Automatic Dimension Guard
 async function generateEmbedding(text) {
   try {
     const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_EMBEDDING_MODEL;
-    const url = isLocal 
+    let url = isLocal 
       ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings` 
       : 'https://openrouter.ai/api/v1/embeddings';
     
-    const headers = { 'Content-Type': 'application/json' };
+    let headers = { 'Content-Type': 'application/json' };
     if (isLocal) {
       if (env.LOCAL_LLM_API) {
         headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
@@ -85,14 +85,15 @@ async function generateEmbedding(text) {
       headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
     }
 
+    let modelName = isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small';
     const body = {
-      model: isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small',
+      model: modelName,
       input: text
     };
 
-    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + LOCAL_EMBEDDING_MODEL + ')' : 'OpenRouter'}`);
+    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + modelName + ')' : 'OpenRouter'}`);
     
-    const res = await fetch(url, {
+    let res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
@@ -102,8 +103,37 @@ async function generateEmbedding(text) {
       throw new Error(`HTTP Error ${res.status}: ${res.statusText}`);
     }
     
-    const data = await res.json();
-    return data.data[0].embedding;
+    let data = await res.json();
+    let embedding = data.data[0].embedding;
+
+    // --- Automatic Dimension Guard ---
+    const DB_DIMENSIONS = 1536; // Your Supabase thoughts table pgvector dimension standard
+    if (isLocal && embedding.length !== DB_DIMENSIONS) {
+      console.warn(`      ⚠️  Dimension Mismatch: Local model '${modelName}' returned ${embedding.length} dimensions, but database expects ${DB_DIMENSIONS}.`);
+      console.log(`      🔄 Automatically falling back to OpenRouter (text-embedding-3-small) to get a compatible 1536-dimension vector...`);
+      
+      // Re-run via OpenRouter
+      url = 'https://openrouter.ai/api/v1/embeddings';
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`
+      };
+      
+      res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'openai/text-embedding-3-small',
+          input: text
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Fallback HTTP Error ${res.status}`);
+      data = await res.json();
+      embedding = data.data[0].embedding;
+    }
+
+    return embedding;
   } catch (err) {
     console.error(`  ⚠️ Failed to generate embedding: ${err.message}`);
     return null;
