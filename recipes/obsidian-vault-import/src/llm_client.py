@@ -67,7 +67,6 @@ def _openrouter_request(path: str, payload: dict, api_key: str) -> dict:
 def generate_embedding(text: str, api_key: str) -> list[float] | None:
     """Generate an embedding vector via the configured provider with retry."""
     for attempt in range(config.MAX_RETRIES):
-        print(f"generating embedding {config.EMBEDDING_MODEL}, {config.BASE_LLM_URL}")
         try:
             payload = {
                 "model": config.EMBEDDING_MODEL,
