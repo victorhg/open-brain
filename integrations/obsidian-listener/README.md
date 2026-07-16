@@ -31,7 +31,7 @@ graph TD
 ## Features Deployed
 
 ### 1. Atomic Heading Chunking & Embeddings
-To keep your vector database clean, the engine splits long notes at H2 (`##`) boundaries. Each chunk becomes a self-contained "thought", prefixed with its file header (e.g., `[Obsidian: Project Roadmap > Phase 2]`). It calls the OpenRouter API to generate vector embeddings and extract rich metadata tags (category, importance, entities).
+To keep your vector database clean, the engine splits long notes at H2 (`##`) boundaries. Each chunk becomes a self-contained "thought", prefixed with its file header (e.g., `[Obsidian: Project Roadmap > Phase 2]`). It calls the local LLM endpoint to generate vector embeddings and extract rich metadata tags (category, importance, entities).
 
 ### 2. Auto-Deduplication (Task 1.2 Integration)
 The engine computes a SHA-256 fingerprint of each text chunk. It upserts the data using Open Brain's new `upsert_thought` RPC. If the content matches an existing fingerprint, it safely merges tags and updates timestamps rather than inserting a duplicate.
@@ -41,7 +41,7 @@ If your note links to other notes (e.g. `[[Related Idea]]`), the engine parses t
 
 ### 4. Zero-Click "Panning for Gold"
 If you add a `#brain-dump`, `#transcript`, or `#gold-panning` tag to a note (or put it in a `Brain Dumps/` folder), the engine bypasses standard chunking and runs the **Gold Panning Engine**:
-1. It parses the entire dump using GPT-4o.
+1. It parses the entire dump using your configured local chat model.
 2. It extracts all high-signal idea, task, and reference threads along with their exact context quotes.
 3. It saves your raw brain dump as a single reference thought.
 4. It captures each extracted thread as a distinct thought, automatically linked directly back to your raw brain dump using database-level **provenance chains**.
@@ -61,7 +61,11 @@ npm install
 Ensure your `.env` in the root of the project contains:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
-- `OPENROUTER_API_KEY`
+- `LOCAL_LLM_BASE_URL`
+- `LOCAL_EMBEDDING_MODEL`
+- `LOCAL_CHAT_MODEL`
+- `LOCAL_LLM_API`
+- `EMBEDDING_DIMENSIONS`
 
 ---
 
@@ -139,7 +143,7 @@ All of them will be linked back to the original `Brain Dump 2026-07-13` in a dat
 ## Troubleshooting
 
 ### Issue: "Error: Missing required environment keys"
-**Solution:** Ensure your root `.env` contains valid `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `OPENROUTER_API_KEY`. The script looks for `.env` exactly two levels up from its folder.
+**Solution:** Ensure your root `.env` contains valid `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and the required `LOCAL_LLM_*` variables. The script looks for `.env` exactly two levels up from its folder.
 
 ### Issue: Wikilink references are not linking
 **Solution:** The linked note must already be imported or captured in your Open Brain database. When importing a deeply connected vault for the first time, run the script twice or run a full import first so all note titles are registered.
