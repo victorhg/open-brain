@@ -39,7 +39,7 @@ def chunk_by_headings(body: str, title: str) -> list[dict]:
     return chunks
 
 
-def chunk_note(note: dict, use_llm: bool, openrouter_key: str,
+def chunk_note(note: dict, use_llm: bool,
                verbose: bool = False) -> list[dict]:
     """Chunk a parsed note into atomic thoughts.
 
@@ -65,7 +65,7 @@ def chunk_note(note: dict, use_llm: bool, openrouter_key: str,
             if verbose:
                 print(f"    LLM chunking section: {chunk['section']} "
                       f"({word_count(chunk['content'])} words)")
-            llm_thoughts = llm_distill(title, chunk['content'], openrouter_key)
+            llm_thoughts = llm_distill(title, chunk['content'])
             for thought in llm_thoughts:
                 results.append({
                     'content': thought,

@@ -1,10 +1,10 @@
 """
 llm_client.py — LLM and embedding API client.
 
-Provides request helpers for both local and OpenRouter endpoints,
-with exponential back-off retry logic. Config globals (BASE_LLM_URL,
-LLM_MODEL, etc.) are read from the config module at call time so they
-always reflect values resolved by the main entry point at startup.
+Provides request helpers for the local OpenAI-compatible endpoint defined by
+BASE_LLM_URL in config. Fully local — no cloud fallback.
+Config globals (BASE_LLM_URL, LLM_MODEL, etc.) are read from the config module
+at call time so they always reflect values resolved by the main entry point at startup.
 """
 
 import json
@@ -48,24 +48,20 @@ import config
 
 
 def _local_request(path: str, payload: dict) -> dict:
-    """POST to the configured LLM endpoint (local or OpenRouter via BASE_LLM_URL)."""
+    """POST to the local OpenAI-compatible LLM endpoint (BASE_LLM_URL)."""
     url = f"{config.BASE_LLM_URL}/{path.lstrip('/')}"
     headers = {"Authorization": f"Bearer {config.LLM_API_KEY}"} if config.LLM_API_KEY else {}
     return requests.post(url, json=payload, headers=headers, timeout=60).json()
 
 
-def _openrouter_request(path: str, payload: dict, api_key: str) -> dict:
-    """POST to the OpenRouter API with an explicit key."""
-    url = f"{config.BASE_LLM_URL}/{path.lstrip('/')}"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
-    return requests.post(url, json=payload, headers=headers, timeout=60).json()
-
-
 def generate_embedding(text: str, api_key: str) -> list[float] | None:
-    """Generate an embedding vector via the configured provider with retry."""
+    """Generate an embedding vector via the local LLM with retry.
+    Raises RuntimeError if BASE_LLM_URL or EMBEDDING_MODEL are not configured.
+    """
+    if not config.BASE_LLM_URL or not config.EMBEDDING_MODEL:
+        raise RuntimeError(
+            "BASE_LLM_URL and EMBEDDING_MODEL must be set in .env — no cloud fallback."
+        )
     for attempt in range(config.MAX_RETRIES):
         try:
             payload = {
@@ -73,10 +69,7 @@ def generate_embedding(text: str, api_key: str) -> list[float] | None:
                 "input": text[:8000],
                 "dimensions": config.EMBEDDING_DIMENSIONS,
             }
-            if config.BASE_LLM_URL and config.EMBEDDING_MODEL:
-                data = _local_request("embeddings", payload)
-            else:
-                data = _openrouter_request("embeddings", payload, api_key)
+            data = _local_request("embeddings", payload)
 
             if "data" not in data:
                 raise ValueError(f"Unexpected response (no 'data' key): {data}")
@@ -110,8 +103,8 @@ def generate_embedding(text: str, api_key: str) -> list[float] | None:
     return None
 
 
-def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
-    """Use the configured LLM to distill a long section into 1-3 atomic thoughts.
+def llm_distill(title: str, content: str) -> list[str]:
+    """Use the local LLM to distill a long section into 1-3 atomic thoughts.
 
     Uses config.LLM_CHUNK_MODEL when set (recommended: a small 3B-7B model that
     fits in memory alongside the embedding model). Falls back to config.LLM_MODEL.
@@ -126,19 +119,11 @@ def llm_distill(title: str, content: str, openrouter_key: str) -> list[str]:
 
     for attempt in range(config.MAX_RETRIES):
         try:
-            if config.BASE_LLM_URL and model:
-                data = _local_request("chat/completions", {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                })
-            else:
-                data = _openrouter_request("chat/completions", {
-                    "model": model,
-                    "messages": messages,
-                    "temperature": 0.3,
-                    "response_format": {"type": "json_object"},
-                }, openrouter_key)
+            data = _local_request("chat/completions", {
+                "model": model,
+                "messages": messages,
+                "temperature": 0.3,
+            })
 
             text = data["choices"][0]["message"]["content"]
             text = _extract_json_text(text)

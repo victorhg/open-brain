@@ -412,7 +412,7 @@ def _run_parse_phase(
     all_thoughts = []
 
     for i, note in enumerate(filtered):
-        chunks = chunk_note(note, use_llm, config.LLM_API_KEY, verbose=args.verbose)
+        chunks = chunk_note(note, use_llm, verbose=args.verbose)
         note_date = extract_date(note['meta'], note['full_path'])
 
         for chunk in chunks:

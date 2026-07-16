@@ -13,8 +13,8 @@
  * 4. Provenance Chain Building: Translates [[wikilinks]] to UUID-based derivation chains.
  * 5. Panning for Gold: Automatically detects '#brain-dump' or '#transcript' and triggers thread analysis.
  * 6. Embedding Generation: Calls the local LLM embedding endpoint (LOCAL_LLM_BASE_URL).
- *    Dimension validation is driven by EMBEDDING_DIMENSIONS from .env — no hardcoded values,
- *    no silent fallback to OpenRouter. Mismatch = loud error.
+ *    Dimension validation is driven by EMBEDDING_DIMENSIONS from .env — no hardcoded values.
+ *    Fully local — no cloud fallback. Missing config = loud error. Mismatch = loud error.
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -49,7 +49,6 @@ const env = { ...fileEnv, ...process.env };
 const { 
   SUPABASE_URL, 
   SUPABASE_SERVICE_ROLE_KEY, 
-  OPENROUTER_API_KEY,
   LOCAL_LLM_BASE_URL,
   LOCAL_EMBEDDING_MODEL,
   LOCAL_CHAT_MODEL,
@@ -77,28 +76,19 @@ function computeFingerprint(text) {
   return crypto.createHash('sha256').update(normalized, 'utf8').digest('hex');
 }
 
-// Generate Embedding via Local LLM or OpenRouter with Automatic Dimension Guard
+// Generate Embedding via Local LLM — fully local, no cloud fallback
 async function generateEmbedding(text) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_EMBEDDING_MODEL) {
+    throw new Error('LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL must be set in .env — no cloud fallback.');
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_EMBEDDING_MODEL;
-    let url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings` 
-      : 'https://openrouter.ai/api/v1/embeddings';
-    
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings`;
     const headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
 
-    const modelName = isLocal ? LOCAL_EMBEDDING_MODEL : 'openai/text-embedding-3-small';
-    const body = {
-      model: modelName,
-      input: text
-    };
+    const body = { model: LOCAL_EMBEDDING_MODEL, input: text };
 
-    console.log(`      [EMBEDDING] Generating via ${isLocal ? 'Local LLM (' + modelName + ')' : 'OpenRouter'} — expecting ${DB_DIMENSIONS} dims`);
+    console.log(`      [EMBEDDING] Generating via local LLM (${LOCAL_EMBEDDING_MODEL}) — expecting ${DB_DIMENSIONS} dims`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -129,23 +119,19 @@ async function generateEmbedding(text) {
   }
 }
 
-// Extract LLM Metadata from thought chunk via Local LLM or OpenRouter
+// Extract LLM Metadata from thought chunk via Local LLM — fully local, no cloud fallback
 async function extractMetadata(text) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
+    console.warn('      ⚠️ LOCAL_LLM_BASE_URL or LOCAL_CHAT_MODEL not set. Using fallback schema.');
+    return { type: 'journal', category: 'general', people: [], topics: [], importance: 3 };
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
-    const url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
-      : 'https://openrouter.ai/api/v1/chat/completions';
-    
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
     const headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
 
     const body = {
-      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o-mini',
+      model: LOCAL_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -163,7 +149,7 @@ async function extractMetadata(text) {
       temperature: 0,
     };
 
-    console.log(`      [METADATA] Analyzing via ${isLocal ? 'Local LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}`);
+    console.log(`      [METADATA] Analyzing via local LLM (${LOCAL_CHAT_MODEL})`);
 
     const res = await fetch(url, {
       method: 'POST',
@@ -328,7 +314,7 @@ async function processFile(filePath) {
     console.log(`   ⚡ Processing chunk: "${chunk.header}"`);
     console.log(`      Content Fingerprint: ${fingerprint}`);
 
-    // Call OpenAI/OpenRouter to get embedding
+    // Generate embedding via local LLM
     const embedding = await generateEmbedding(fullContent);
     if (!embedding) continue;
 
@@ -402,21 +388,16 @@ async function runGoldPanningFlow(fileData, filePath) {
   // Set up prompt for deep thread extraction
   console.log('   🧠 Step 1: Running Phase 1 (Extracting idea threads)...');
   
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
+    throw new Error('LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL must be set in .env — no cloud fallback.');
+  }
   try {
-    const isLocal = !!LOCAL_LLM_BASE_URL && !!LOCAL_CHAT_MODEL;
-    const url = isLocal 
-      ? `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions` 
-      : 'https://openrouter.ai/api/v1/chat/completions';
-    
+    const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/chat/completions`;
     const headers = { 'Content-Type': 'application/json' };
-    if (isLocal) {
-      if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
-    } else {
-      headers['Authorization'] = `Bearer ${OPENROUTER_API_KEY}`;
-    }
+    if (LOCAL_LLM_API) headers['Authorization'] = `Bearer ${LOCAL_LLM_API}`;
 
     const body = {
-      model: isLocal ? LOCAL_CHAT_MODEL : 'openai/gpt-4o',
+      model: LOCAL_CHAT_MODEL,
       messages: [
         {
           role: 'system',
@@ -435,7 +416,7 @@ Return ONLY a valid JSON array, no markdown or wrapper code.`
       temperature: 0.1,
     };
 
-    console.log(`      [PANNING] Processing via ${isLocal ? 'Local Chat LLM (' + LOCAL_CHAT_MODEL + ')' : 'OpenRouter'}`);
+    console.log(`      [PANNING] Processing via local LLM (${LOCAL_CHAT_MODEL})`);
 
     const res = await fetch(url, {
       method: 'POST',
