@@ -46,7 +46,20 @@ Semantic search against 3,911 thoughts confirmed working.
 
 ---
 
-## Phase A (partial): Query Engine Upgrade
+### Task A.2: Grounding Prompt Hardening ✅
+**Completed:** 2026-07-16
+
+- `GROUNDING_SYSTEM_PROMPT` constant added — sent as a `system` role message (not user).
+- Per-chunk context headers: `[Source: {title} | {folder} | {date}]` before every chunk.
+- `--strict` flag: aborts generation if max match similarity < 0.25, prints canonical
+  "I don't have enough information" message without calling the LLM.
+- Output label changed from "SYNTHESIZED ANSWER" → **"GROUNDED ANSWER"**.
+
+**Files:** `bin/query-brain.js`
+
+---
+
+## Phase A (continued)
 
 ### Task A.1: Embedding Model Consistency ✅
 **Completed:** 2026-07 | Dimension-consistency check run against Supabase.

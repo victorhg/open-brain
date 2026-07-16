@@ -39,36 +39,7 @@ This roadmap merges two visions:
 > **Vision (ArchDoc):** a full 3-stage retrieval pipeline — semantic search → context assembly →
 > grounded local generation. Every answer cites sources. Hallucination is explicitly blocked.
 
-### Task A.2: Harden the Grounding Prompt in `query-brain.js`
-
-**Objective:** Enforce strict context-grounding in the `--answer` path.
-
-**Current state:** a *soft* grounding instruction already exists, but it is sent as a **user**
-message with no source citations, no per-chunk metadata, and no low-similarity guard.
-
-**Steps:**
-1. Promote the grounding text to a real `system` role in the chat call:
-   ```
-   You are a personal knowledge assistant.
-   Answer the user's question using ONLY the context passages provided below.
-   Rules:
-   - If the context contains a clear answer, provide it and cite the source note title in [brackets].
-   - If the context is partially relevant, share what it says and note its limits.
-   - If the context does not contain enough information, respond with:
-     "I don't have enough information in your notes to answer this."
-   - Never use knowledge from outside the provided context.
-   - Never invent facts, dates, names, or relationships not present in the context.
-   ```
-2. Prepend each context chunk with source metadata:
-   `[Source: {title} | {folder} | {created_at}]` then the chunk content.
-3. Add a `--strict` flag that aborts generation if all retrieved similarity scores are below `0.25`.
-
-**Acceptance Test:**
-```bash
-node bin/query-brain.js "what are my goals for the masters thesis?" --answer   # cites real titles
-node bin/query-brain.js "what is the population of Mars in 2150?" --answer --strict  # "I don't have enough information"
-```
-**Time:** 1 hour | **Files:** `bin/query-brain.js`
+~~### Task A.2: Harden the Grounding Prompt~~ ✅ **Done — see HISTORY.md**
 
 ---
 

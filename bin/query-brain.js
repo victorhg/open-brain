@@ -8,12 +8,13 @@
  * and matches them against thoughts in your Supabase database.
  * 
  * Usage:
- *   node bin/query-brain.js "your semantic search query" [--limit 5] [--threshold 0.3] [--answer]
+ *   node bin/query-brain.js "your semantic search query" [--limit 5] [--threshold 0.3] [--answer] [--strict]
  * 
  * Options:
  *   --limit N         Max search results (default: 5)
- *   --threshold T     Min similarity score 0-1 (default: 0.3)
- *   --answer          Have the local LLM answer your question using the matched context!
+ *   --threshold T     Similarity threshold 0-1 (default: 0.3)
+ *   --answer          Synthesize a grounded answer using the local Chat LLM
+ *   --strict          Abort answer generation if best match similarity < 0.25 (no hallucination on weak context)
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -72,7 +73,8 @@ if (!queryText || queryText.startsWith('-')) {
   console.log('Options:');
   console.log('  --limit N        Max results (default: 5)');
   console.log('  --threshold T    Similarity threshold 0-1 (default: 0.3)');
-  console.log('  --answer         Synthesize an answer using your local Chat LLM');
+  console.log('  --answer         Synthesize a grounded answer using your local Chat LLM');
+  console.log('  --strict         Abort if best match similarity < 0.25 (prevents hallucination on weak context)');
   console.log('');
   console.log('Example:');
   console.log('  node bin/query-brain.js "what did I discuss with Sarah about SEO" --answer');
@@ -82,11 +84,13 @@ if (!queryText || queryText.startsWith('-')) {
 let limit = 5;
 let threshold = 0.3;
 let answer = false;
+let strict = false;
 
 for (let i = 1; i < args.length; i++) {
   if (args[i] === '--limit') limit = parseInt(args[++i], 10) || 5;
   if (args[i] === '--threshold') threshold = parseFloat(args[++i]) || 0.3;
   if (args[i] === '--answer') answer = true;
+  if (args[i] === '--strict') strict = true;
 }
 
 // --- Helpers ---
@@ -116,7 +120,18 @@ async function generateEmbedding(text) {
   }
 }
 
-// Ask Local LLM to synthesize an answer based on search context
+// Grounding system prompt — the LLM must answer ONLY from provided context
+const GROUNDING_SYSTEM_PROMPT = `You are a personal knowledge assistant.
+Answer the user's question using ONLY the context passages provided below.
+Rules:
+- If the context contains a clear answer, provide it and cite the source note title in [brackets].
+- If the context is partially relevant, share what it says and note its limits.
+- If the context does not contain enough information, respond with exactly:
+  "I don't have enough information in your notes to answer this."
+- Never use knowledge from outside the provided context.
+- Never invent facts, dates, names, or relationships not present in the context.`;
+
+// Ask Local LLM to synthesize a grounded answer based on search context
 async function synthesizeAnswer(question, contextThoughts) {
   if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
     return '⚠️ LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL must be set in .env for answer synthesis.';
@@ -126,32 +141,31 @@ async function synthesizeAnswer(question, contextThoughts) {
     const headers = { 'Content-Type': 'application/json' };
     if (env.LOCAL_LLM_API) headers['Authorization'] = `Bearer ${env.LOCAL_LLM_API}`;
 
-    const contextText = contextThoughts.map((t, i) => `[Source ${i+1}: ${t.metadata?.title || 'Unknown'}]\n${t.content}`).join('\n\n');
-
-    const prompt = `You are Open Brain, a helpful personal knowledge assistant.
-Answer the user's question relying strictly on the highly relevant context retrieved from their personal thoughts and Obsidian vault notes.
-If the context does not contain the answer, say honestly that you couldn't find enough information in their brain.
-
-CONTEXT:
-${contextText}
-
-QUESTION:
-${question}`;
+    // Format each chunk with full source provenance header
+    const contextText = contextThoughts.map((t) => {
+      const title  = t.metadata?.title  || 'Unknown';
+      const folder = t.metadata?.folder || t.metadata?.category || 'Unknown';
+      const date   = t.created_at ? new Date(t.created_at).toISOString().split('T')[0] : 'Unknown';
+      return `[Source: ${title} | ${folder} | ${date}]\n${t.content}`;
+    }).join('\n\n---\n\n');
 
     const body = {
       model: LOCAL_CHAT_MODEL,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [
+        { role: 'system', content: GROUNDING_SYSTEM_PROMPT },
+        { role: 'user', content: `CONTEXT:\n\n${contextText}\n\nQUESTION:\n${question}` },
+      ],
       temperature: 0.3,
     };
 
-    console.log(`\n🧠 Synthesizing local answer using Local Chat LLM (${LOCAL_CHAT_MODEL})...\n`);
+    console.log(`\n🧠 Synthesizing grounded answer via local LLM (${LOCAL_CHAT_MODEL})...\n`);
 
     const res = await fetch(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(body),
     });
-    
+
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return data.choices[0].message.content;
@@ -209,11 +223,21 @@ async function runSearch() {
     console.log('\n' + '═'.repeat(60) + '\n');
   });
 
-  // 3. Synthesize Local Answer if requested
+  // 3. Synthesize grounded answer if requested
   if (answer) {
+    // --strict guard: abort if best match is below the confident-context threshold
+    if (strict) {
+      const maxSimilarity = Math.max(...matches.map(m => m.similarity));
+      if (maxSimilarity < 0.25) {
+        console.log('\n🔒 [--strict] Best match similarity is ' + (maxSimilarity * 100).toFixed(1) + '% — below the 25% confident-context threshold.');
+        console.log("I don't have enough information in your notes to answer this.");
+        process.exit(0);
+      }
+    }
+
     const answerText = await synthesizeAnswer(queryText, matches);
     console.log('═'.repeat(60));
-    console.log('🤖 SYNTHESIZED ANSWER:');
+    console.log('🤖 GROUNDED ANSWER:');
     console.log('═'.repeat(60));
     console.log(answerText);
     console.log('═'.repeat(60));
