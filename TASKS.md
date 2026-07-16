@@ -74,7 +74,7 @@ the foundation for graph expansion (Phase B) and wiki lookup (Phase C).
 
 ---
 
-### Task A.4: Promote CLI Tools into Self-Contained Recipes
+~~### Task A.4: Promote CLI Tools into Self-Contained Recipes~~ ✅ **Done — see HISTORY.md**
 
 **Objective:** Move `bin/query-brain.js` and `bin/find-relations.js` into their own recipe folders
 so they can graduate into extensions later (per AGENTS.md "modular integrity").
