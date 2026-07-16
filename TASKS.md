@@ -19,7 +19,7 @@ This roadmap merges two visions:
 | **P0** | Foundation — do first. Everything else compounds on it. |
 | **P1** | High value, unblocked once P0 lands. |
 | **P2** | The differentiator; needs P1 in place. |
-| **⛔ Blocked** | Depends on the external **NateOB1 repo, which is not present locally**. Cannot start until that source is available. |
+| **Deferred** | NateOB1-sourced tasks — repo now available at `/tmp/NateBJones-OB1`. Intentionally after P0–P2. |
 
 ---
 
@@ -30,7 +30,7 @@ This roadmap merges two visions:
 - **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
-- **⛔ Blocked:** extensions, ChatGPT/dedup imports, dashboard, Slack/Discord capture, advanced recipes.
+- **Deferred — NateOB1-sourced tasks:** extensions, imports, dashboard, capture, advanced recipes. Repo available; start after P2.
 
 ---
 
@@ -234,21 +234,16 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# ⛔ Blocked / Deferred — Pending NateOB1 Source Repo
+# Deferred — NateOB1 Reference Tasks (repo available at `/tmp/NateBJones-OB1`)
 
-> Every task below is written as *"copy from NateOB1"*. The repo
-> `https://github.com/NateBJones-Projects/OB1` is **not present locally**
-> (`/tmp/pi-github-repos/` currently only has `codexstar69`). **Cannot start** until either the repo is
-> cloned locally or each task is re-scoped to build from scratch. Do not treat these as ready work.
+> Reference repo cloned at **`/tmp/NateBJones-OB1`**. Tasks below can now be executed.
+> Priority is intentionally **after P0–P2** — build the local-first engine first, then layer extensions on top.
 
-- **Extensions:** Household Knowledge Base, Home Maintenance Tracker, Professional CRM, Family Calendar.
-- **Data import:** ChatGPT conversation import, fingerprint-dedup backfill.
-- **Dashboard:** Open Brain Dashboard (Next.js) with wiki + learnings panels — best after Phases A + C.
-- **Capture integrations:** Slack capture (webhook Edge Function), Discord capture (bot).
-- **Advanced recipes:** Daily Digest (after Phase D), Life Engine (after Phase D).
-
-> **Action needed from user:** clone NateOB1 locally, or confirm these should be rebuilt from scratch
-> (which changes their estimates substantially).
+- **Extensions:** Household Knowledge Base (`extensions/household-knowledge/`), Home Maintenance Tracker (`extensions/home-maintenance/`), Professional CRM (`extensions/professional-crm/`), Family Calendar — best started after Phase A.
+- **Data import:** ChatGPT conversation import (`recipes/chatgpt-conversation-import/`), fingerprint-dedup backfill (`recipes/fingerprint-dedup-backfill/`) — start after A.1 is confirmed stable.
+- **Dashboard:** Open Brain Dashboard Next.js (`dashboards/open-brain-dashboard-next/`) — meaningful only after Phase C (wiki pages give it real content).
+- **Capture integrations:** Slack capture (`integrations/slack-capture/`), Discord capture (`integrations/discord-capture/`).
+- **Advanced recipes:** Daily Digest (`recipes/daily-digest/`), Life Engine (`recipes/life-engine/`) — both depend on Phase D (learnings).
 
 ---
 

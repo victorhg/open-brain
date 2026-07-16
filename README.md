@@ -24,3 +24,10 @@ Instead of running manual commands, interact with `pi` to manage your brain.
 
 ## 🧠 Agent Operational Knowledge Base
 For technical deep-dives, configuration validation, and API troubleshooting (especially regarding LLM/API keys), please refer to the detailed operational guidelines located at: `recipes/LLM_Configuration_Insights.md`
+
+## 📋 Roadmap & History
+
+- [`TASKS.md`](./TASKS.md) — **active roadmap**. All undone work, prioritized by tier (P0 → P2). Includes the query engine, knowledge graph, wiki synthesis, and accumulated learnings phases. Tasks blocked on external dependencies are clearly marked.
+- [`HISTORY.md`](./HISTORY.md) — **immutable completion log**. Every finished phase and task with dates and validation results. Source of truth for what has already been built.
+
+> Rule: when a task in `TASKS.md` is completed, move it to `HISTORY.md` — never delete it.
