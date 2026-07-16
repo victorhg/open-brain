@@ -39,62 +39,11 @@ This roadmap merges two visions:
 > **Vision (ArchDoc):** a full 3-stage retrieval pipeline — semantic search → context assembly →
 > grounded local generation. Every answer cites sources. Hallucination is explicitly blocked.
 
-~~### Task A.2: Harden the Grounding Prompt~~ ✅ **Done — see HISTORY.md**
-
----
-
-~~### Task A.3: Build `lib/context-assembler.js`~~ ✅ **Done — see HISTORY.md**
-
-**Objective:** Extract retrieval + assembly out of `query-brain.js` into a reusable module —
-the foundation for graph expansion (Phase B) and wiki lookup (Phase C).
-
-**Steps:**
-1. Create `lib/context-assembler.js`:
-   ```typescript
-   interface AssemblerOptions {
-     query: string;
-     topK?: number;           // default: 6
-     minSimilarity?: number;  // default: 0.25
-     includeGraph?: boolean;  // Phase B — default: false
-     includeWiki?: boolean;   // Phase C — default: false
-   }
-   interface ContextResult {
-     chunks: ThoughtChunk[];
-     graphNeighbors: ThoughtChunk[]; // Phase B
-     wikiPages: WikiPage[];          // Phase C
-     assembledContext: string;
-   }
-   export async function assembleContext(opts: AssemblerOptions): Promise<ContextResult>
-   ```
-2. Move semantic search logic from `query-brain.js` into `assembleContext()`.
-3. Update `query-brain.js` to call it. Stub `includeGraph` / `includeWiki` with `// TODO: Phase B/C`.
-
-**Acceptance Test:** `query-brain.js` behaviour unchanged after refactor.
-**Depends:** A.2 | **Time:** 1.5 hours | **Files:** `lib/context-assembler.js`, `bin/query-brain.js`
-
----
-
-~~### Task A.4: Promote CLI Tools into Self-Contained Recipes~~ ✅ **Done — see HISTORY.md**
-
-**Objective:** Move `bin/query-brain.js` and `bin/find-relations.js` into their own recipe folders
-so they can graduate into extensions later (per AGENTS.md "modular integrity").
-
-**Steps:**
-1. Create `recipes/query-brain/` and `recipes/find-relations/`, each with:
-   - the script (`index.js` or kept name), its own `README.md`, and a `package.json` if it has deps.
-2. Have both recipes import the shared `lib/context-assembler.js` (A.3) rather than duplicating logic.
-3. Keep thin shims in `bin/` (or update docs) so existing invocation paths still work.
-4. Update the root `README.md` recipe list to reflect the new recipes.
-
-**Acceptance Test:** both tools run from their recipe folders; smoke test still passes.
-**Depends:** A.3 | **Time:** 1.5 hours
-**Files:** `recipes/query-brain/`, `recipes/find-relations/`, root `README.md`
-
 ---
 
 # P0 · Full-Local Hardening
 
-### Task L.1: Strip Residual OpenRouter Fallback
+### Task L.1: Strip Residual OpenRouter Fallback ✅ **Done — see HISTORY.md** ✅ **Done — see HISTORY.md**
 
 **Objective:** OpenBrain is fully local — remove all cloud LLM fallback branches.
 
