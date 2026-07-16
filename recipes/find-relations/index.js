@@ -32,19 +32,57 @@ if (!conceptA || !conceptB) {
   process.exit(0);
 }
 
-// ---------------------------------------------------------------------------
-// Relational analysis (LLM)
-// ---------------------------------------------------------------------------
+export async function runRelationFinder(conceptA, conceptB) {
+  console.log(`\n🕸️  Open Brain Multi-Hop Relation Finder`);
+  console.log('═'.repeat(60));
+  console.log(`Concept A: "${conceptA}"`);
+  console.log(`Concept B: "${conceptB}"`);
+  console.log('═'.repeat(60));
 
-/**
- * Ask the local LLM to analyze and synthesize the relationship between two
- * concepts from pre-formatted context strings produced by assembleContext().
- *
- * @param {string} conceptA
- * @param {string} conceptB
- * @param {string} contextA  — formatted context block for concept A
- * @param {string} contextB  — formatted context block for concept B
- */
+  console.log('   🔍 Running parallel semantic searches...');
+
+  let chunksA, chunksB, contextA, contextB;
+  try {
+    ([
+      { chunks: chunksA, assembledContext: contextA },
+      { chunks: chunksB, assembledContext: contextB },
+    ] = await Promise.all([
+      assembleContext({ query: conceptA, topK: 6, minSimilarity: 0.25 }),
+      assembleContext({ query: conceptB, topK: 6, minSimilarity: 0.25 }),
+    ]));
+  } catch (err) {
+    console.error(`❌ Context assembly failed: ${err.message}`);
+    return;
+  }
+
+  console.log(`   ✓ Retrieved ${chunksA.length} notes for "${conceptA}"`);
+  console.log(`   ✓ Retrieved ${chunksB.length} notes for "${conceptB}"`);
+
+  if (chunksA.length === 0 && chunksB.length === 0) {
+    console.log('   ❌ No notes found for either concept. Cannot analyze relations.');
+    return;
+  }
+
+  const overlapTitles = [];
+  const bIds = new Set(chunksB.map(t => t.id));
+  for (const t of chunksA) {
+    if (bIds.has(t.id)) overlapTitles.push(t.metadata?.title || 'Untitled');
+  }
+
+  if (overlapTitles.length > 0) {
+    console.log('   💡 Found direct overlap! These notes contain BOTH concepts:');
+    overlapTitles.forEach(title => console.log(`      - ${title}`));
+  }
+
+  const synthesis = await analyzeRelation(conceptA, conceptB, contextA, contextB);
+
+  console.log('\n' + '═'.repeat(60));
+  console.log(`🤖 RELATIONAL ANALYSIS: "${conceptA}" & "${conceptB}"`);
+  console.log('═'.repeat(60));
+  console.log(synthesis);
+  console.log('═'.repeat(60) + '\n');
+}
+
 async function analyzeRelation(conceptA, conceptB, contextA, contextB) {
   if (!LOCAL_LLM_BASE_URL || !LOCAL_CHAT_MODEL) {
     return '⚠️ LOCAL_LLM_BASE_URL and LOCAL_CHAT_MODEL must be set in .env for relational analysis.';
@@ -96,64 +134,3 @@ Directions:
     return `⚠️ Relational analysis failed: ${err.message}`;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
-async function main() {
-  console.log(`\n🕸️  Open Brain Multi-Hop Relation Finder`);
-  console.log('═'.repeat(60));
-  console.log(`Concept A: "${conceptA}"`);
-  console.log(`Concept B: "${conceptB}"`);
-  console.log('═'.repeat(60));
-
-  console.log('   🔍 Running parallel semantic searches...');
-
-  let chunksA, chunksB, contextA, contextB;
-  try {
-    ([
-      { chunks: chunksA, assembledContext: contextA },
-      { chunks: chunksB, assembledContext: contextB },
-    ] = await Promise.all([
-      assembleContext({ query: conceptA, topK: 6, minSimilarity: 0.25 }),
-      assembleContext({ query: conceptB, topK: 6, minSimilarity: 0.25 }),
-    ]));
-  } catch (err) {
-    console.error(`❌ Context assembly failed: ${err.message}`);
-    process.exit(1);
-  }
-
-  console.log(`   ✓ Retrieved ${chunksA.length} notes for "${conceptA}"`);
-  console.log(`   ✓ Retrieved ${chunksB.length} notes for "${conceptB}"`);
-
-  if (chunksA.length === 0 && chunksB.length === 0) {
-    console.log('   ❌ No notes found for either concept. Cannot analyze relations.');
-    process.exit(1);
-  }
-
-  // Find direct overlaps (notes appearing in both searches)
-  const overlapTitles = [];
-  const bIds = new Set(chunksB.map(t => t.id));
-  for (const t of chunksA) {
-    if (bIds.has(t.id)) overlapTitles.push(t.metadata?.title || 'Untitled');
-  }
-
-  if (overlapTitles.length > 0) {
-    console.log('   💡 Found direct overlap! These notes contain BOTH concepts:');
-    overlapTitles.forEach(title => console.log(`      - ${title}`));
-  }
-
-  const synthesis = await analyzeRelation(conceptA, conceptB, contextA, contextB);
-
-  console.log('\n' + '═'.repeat(60));
-  console.log(`🤖 RELATIONAL ANALYSIS: "${conceptA}" & "${conceptB}"`);
-  console.log('═'.repeat(60));
-  console.log(synthesis);
-  console.log('═'.repeat(60) + '\n');
-}
-
-main().catch(err => {
-  console.error('Fatal relational search error:', err);
-  process.exit(1);
-});

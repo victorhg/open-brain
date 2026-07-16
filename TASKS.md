@@ -41,6 +41,21 @@ This roadmap merges two visions:
 
 ---
 
+### Task 0.1: Build Unified CLI Tool (The "Brain" Router)
+**Objective:** Replace disparate `bin/` scripts with a single entry point to prevent "CLI drift" and centralize configuration/error handling.
+**Steps:**
+1. Create `cli/brain.js` using a CLI framework (e.g., `commander`).
+2. Route commands: `brain query`, `brain find-relations`, `brain ingest`.
+3. Centralize flag handling (`--limit`, `--strict`, etc.) so they are consistent across all sub-commands.
+4. Replace `bin/` shims with calls to the unified CLI.
+**Time:** 2 hours | **Files:** `cli/`, `bin/` (update/cleanup)
+
+### Task A.2: Grounding Prompt Hardening ✅ **Done**
+### Task A.3: Build `lib/context-assembler.js` ✅ **Done**
+### Task A.4: Promote Tools to Recipes ✅ **Done**
+
+---
+
 # P0 · Full-Local Hardening
 
 ### Task L.1: Strip Residual OpenRouter Fallback ✅ **Done — see HISTORY.md** ✅ **Done — see HISTORY.md**
@@ -201,40 +216,23 @@ Wire `open-brain-mcp` to Cursor/Claude Code for in-editor knowledge-graph access
 
 ## Immediate Next Actions
 
-1. **A.2** — harden grounding prompt (system role + citations + `--strict`). ~1 h
-2. **A.3** — extract `lib/context-assembler.js`. ~1.5 h
-3. **A.4** — promote `query-brain` / `find-relations` into recipes. ~1.5 h
-4. **L.1** — strip OpenRouter fallback from obsidian-listener. ~1 h
-5. Then **B.1 → B.2** to start the graph layer.
+1. **0.1** — build unified CLI tool. ~2 h
+2. **A.2** — harden grounding prompt (system role + citations + `--strict`). ~1 h
+3. **A.3** — extract `lib/context-assembler.js`. ~1.5 h
+4. **A.4** — promote `query-brain` / `find-relations` into recipes. ~1.5 h
+5. **L.1** — strip OpenRouter fallback from obsidian-listener. ~1 h
+6. Then **B.1 → B.2** to start the graph layer.
 
-**Time to Phase A + full-local complete:** ~5 hours focused work.
+**Time to Phase A + full-local complete:** ~7 hours focused work.
 **Time to Phase B + C complete:** ~15 additional hours.
 **Time to Phase D complete:** ~5 additional hours.
 
 ---
 
-## Architecture Reference
+## Future Improvements
 
-```
-Query Pipeline (target state after Phases A–D):
-─────────────────────────────────────────────────────
-User query
-  → embed with LOCAL_EMBEDDING_MODEL via LOCAL_LLM_BASE_URL (local, OpenAI-compat)
-  → Stage 1: semantic search → top-6 thoughts (pgvector cosine)
-  → Stage 2: graph traversal → 1-hop neighbors via graph_edges
-  → Stage 3: wiki lookup → matching wiki_pages (entity + synthesis)
-  → Learnings injection → relevant cross-session insights
-  → Context assembly → ranked, deduplicated, provenance-labelled
-  → Grounded generation → local LLM, strict: "answer ONLY from context"
-  → Session logged → query_sessions
-  → Optionally filed → wiki_pages (page_type = 'answer')
-─────────────────────────────────────────────────────
-```
-
-See also:
-- [`HISTORY.md`](./HISTORY.md) — completed work.
-- `OpenBrain  Architecture Document for a Local Personal AI Second Brain.md` — original ArchDoc vision.
-- `primitives/README.md`, `schemas/README.md`.
+- **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`. Currently, ingestion scripts contain too much logic (parsing, embedding, DB writing), making testing and schema migration difficult. Decoupling ensures that database transaction logic is centralized and independent of the ingestion source.
+- **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status` to prevent race conditions during concurrent ingestion (e.g., watcher vs. manual import). Add a validation step in the ingestion path that checks against canonical schemas to ensure data integrity before committing to the `thoughts` table.
 
 ---
 

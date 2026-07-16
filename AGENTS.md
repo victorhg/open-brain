@@ -35,3 +35,9 @@ Reporting implementation completion:
   2. SQL/Database changes required.
   3. Logic implementation.
   4. Testing/Verification.
+
+## CLI Interface
+- The canonical entry point for all Open Brain tasks is the `brain` CLI (located at `cli/brain.js`).
+- Use `brain <command>` for routine tasks.
+- Standard commands: `brain query`, `brain find-relations`.
+- Avoid executing raw files in `bin/` or `recipes/` directly.

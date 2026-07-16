@@ -21,39 +21,6 @@ import { assembleContext, env, generateEmbedding } from '../../lib/context-assem
 
 const { LOCAL_LLM_BASE_URL, LOCAL_CHAT_MODEL } = env;
 
-// --- Parse CLI Args ---
-const args = process.argv.slice(2);
-const queryText = args[0];
-
-if (!queryText || queryText.startsWith('-')) {
-  console.log('🤖 Open Brain Semantic Search CLI');
-  console.log('═'.repeat(40));
-  console.log('Usage:');
-  console.log('  node bin/query-brain.js "<search query>" [options]');
-  console.log('');
-  console.log('Options:');
-  console.log('  --limit N        Max results (default: 5)');
-  console.log('  --threshold T    Similarity threshold 0-1 (default: 0.3)');
-  console.log('  --answer         Synthesize a grounded answer using your local Chat LLM');
-  console.log('  --strict         Abort if best match similarity < 0.25 (prevents hallucination on weak context)');
-  console.log('');
-  console.log('Example:');
-  console.log('  node bin/query-brain.js "what did I discuss with Sarah about SEO" --answer');
-  process.exit(0);
-}
-
-let limit = 5;
-let threshold = 0.3;
-let answer = false;
-let strict = false;
-
-for (let i = 1; i < args.length; i++) {
-  if (args[i] === '--limit') limit = parseInt(args[++i], 10) || 5;
-  if (args[i] === '--threshold') threshold = parseFloat(args[++i]) || 0.3;
-  if (args[i] === '--answer') answer = true;
-  if (args[i] === '--strict') strict = true;
-}
-
 // --- Helpers ---
 
 // Remove duplicate generateEmbedding — imported from lib/context-assembler.js
@@ -106,10 +73,11 @@ async function synthesizeAnswer(question, assembledContext) {
 
 // --- Main Execution ---
 
-async function runSearch() {
+export async function runQuery(queryText, options = {}) {
+  const { limit = 5, threshold = 0.3, answer = false, strict = false } = options;
+
   console.log(`\n🔍 Searching Open Brain for: "${queryText}"...`);
 
-  // 1. Retrieve and assemble context via the shared assembler
   let chunks, assembledContext;
   try {
     ({ chunks, assembledContext } = await assembleContext({
@@ -124,7 +92,7 @@ async function runSearch() {
 
   if (!chunks || chunks.length === 0) {
     console.log('\n🤷 No relevant thoughts found in your database. Try lowering the --threshold.');
-    process.exit(0);
+    return;
   }
 
   console.log(`\n🎉 Found ${chunks.length} matching thought(s) in your Open Brain:\n`);
@@ -139,7 +107,7 @@ async function runSearch() {
     console.log(`📌 Result #${idx + 1} [Relevance: ${similarity}% | Type: ${type} | Topic: ${category}]`);
     console.log(`📂 Source: Obsidian > ${title}${header}`);
     console.log('─'.repeat(50));
-    console.log(m.content.replace(/^\[Obsidian:.*\]\n\n/, '').trim()); // Strip prefix for clean terminal reading
+    console.log(m.content.replace(/^\[Obsidian:.*\]\n\n/, '').trim());
     
     if (m.derived_from && m.derived_from.length > 0) {
       console.log(`🔗 Provenance: Derived from ${m.derived_from.length} parent note(s)`);
@@ -147,15 +115,13 @@ async function runSearch() {
     console.log('\n' + '═'.repeat(60) + '\n');
   });
 
-  // 2. Synthesize grounded answer if requested
   if (answer) {
-    // --strict guard: abort if best match is below the confident-context threshold
     if (strict) {
       const maxSimilarity = Math.max(...chunks.map(m => m.similarity));
       if (maxSimilarity < 0.25) {
         console.log('\n🔒 [--strict] Best match similarity is ' + (maxSimilarity * 100).toFixed(1) + '% — below the 25% confident-context threshold.');
         console.log("I don't have enough information in your notes to answer this.");
-        process.exit(0);
+        return;
       }
     }
 
@@ -167,8 +133,3 @@ async function runSearch() {
     console.log('═'.repeat(60));
   }
 }
-
-runSearch().catch(err => {
-  console.error('Fatal query search error:', err);
-  process.exit(1);
-});
