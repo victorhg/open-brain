@@ -22,6 +22,10 @@ Reporting implementation completion:
 ## Operational Directives
 - **Verification:** Before performing any task, read the relevant `README.md` in the target directory (`recipes/`, `extensions/`, or `integrations/`).
 - **Syncing:** Every time you finish a task, ensure the `README.md` of the project root reflects the current state of installed extensions and configured recipes.
+- **Task Management (The Golden Rule):**
+    1. All pending work must be tracked in `TASKS.md` with appropriate P0/P1/P2 priorities.
+    2. When a task is completed, move it to `HISTORY.md` immediately.
+    3. Never delete completed tasks from `TASKS.md` without logging them in `HISTORY.md`.
 - **Error Handling:** If a command fails, do not retry blindly. Fetch logs from the specific service (Supabase Edge Function or local process) and ask for user clarification if the issue persists.
 - **Skill Usage:** Leverage the `/skills` library to standardize agent behavior. If a task requires a new pattern, draft it as a new skill pack and propose its inclusion.
 
