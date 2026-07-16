@@ -57,6 +57,17 @@ Semantic search against 3,911 thoughts confirmed working.
 
 **Files:** `bin/query-brain.js`
 
+### Task A.3: Build `lib/context-assembler.js` ✅
+**Completed:** 2026-07-16
+
+- Extracted duplicated logic (env loading, Supabase client, `generateEmbedding`, semantic search RPC)
+  into a centralized module `lib/context-assembler.js`.
+- Refactored `bin/query-brain.js` and `bin/find-relations.js` to use `assembleContext()` for
+  retrieval, significantly reducing code duplication and centralizing the retrieval pipeline.
+- Interfaces defined for future Phase B (graph) and Phase C (wiki) integration.
+
+**Files:** `lib/context-assembler.js`, `bin/query-brain.js`, `bin/find-relations.js`
+
 ---
 
 ## Phase A (continued)

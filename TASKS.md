@@ -43,7 +43,7 @@ This roadmap merges two visions:
 
 ---
 
-### Task A.3: Build `lib/context-assembler.js`
+~~### Task A.3: Build `lib/context-assembler.js`~~ ✅ **Done — see HISTORY.md**
 
 **Objective:** Extract retrieval + assembly out of `query-brain.js` into a reusable module —
 the foundation for graph expansion (Phase B) and wiki lookup (Phase C).
