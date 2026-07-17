@@ -90,7 +90,13 @@ Semantic search against 3,911 thoughts confirmed working.
 
 ---
 
-## Phase A (continued)
+## Phase 1.6: System Integrity & Maintenance ✅
+
+### Task 1.6.1: Smoke Test Remediation & Automation ✅
+**Completed:** 2026-07-16 | Resolved issues identified in `SMOKE_TEST_HANDOFF_2026-07-16.md`. Integrated `recipes/brain-smoke-test` as the canonical verification process. Updated `README.md` and `recipes/brain-smoke-test/README.md` with operational guidelines and CI integration instructions.
+
+---
+
 
 ### Task A.1: Embedding Model Consistency ✅
 **Completed:** 2026-07 | Dimension-consistency check run against Supabase.
