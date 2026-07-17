@@ -116,7 +116,7 @@ FILE LOCATION
 
 7. **Verify in Supabase.** Open your Supabase dashboard → Table Editor → `thoughts`. You should see rows with:
    - `content` — your note text with an `[Obsidian: Title | Folder]` prefix
-   - `embedding` — a 1536-dimensional vector
+   - `embedding` — a 2560-dimensional vector
    - `metadata` — JSON with source, title, folder, tags, date, and wikilinks
 
 ## Options

@@ -122,6 +122,9 @@ const REST_API_BASE = env("REST_API_BASE").replace(/\/+$/, "");
 // REST base-URL probe, not a dashboard health probe.
 const REST_API_PUBLIC_URL = env("NEXT_PUBLIC_API_URL").replace(/\/+$/, "");
 const ANON_KEY = env("SUPABASE_ANON_KEY");
+// Dimensionality of the pgvector embedding column. Must match the index on
+// public.thoughts. Read from EMBEDDING_DIMENSIONS in .env; default to 2560.
+const EMBEDDING_DIMENSIONS = Number(env("EMBEDDING_DIMENSIONS")) || 2560;
 
 if (!SUPABASE_URL || !SERVICE_KEY || !MCP_KEY) {
   const missing = [];
@@ -394,7 +397,7 @@ const dbChecks = [
         method: "POST",
         headers: SVC_HEADERS,
         body: JSON.stringify({
-          query_embedding: new Array(1536).fill(0),
+          query_embedding: new Array(EMBEDDING_DIMENSIONS).fill(0),
           match_threshold: 0.0,
           match_count: 1,
         }),

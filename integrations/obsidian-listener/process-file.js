@@ -106,7 +106,7 @@ async function generateEmbedding(text) {
     // --- Dimension Guard (fail loudly — no silent cloud fallback) ---
     if (embedding.length !== DB_DIMENSIONS) {
       throw new Error(
-        `Dimension mismatch: model '${modelName}' returned ${embedding.length} dims, ` +
+        `Dimension mismatch: model '${LOCAL_EMBEDDING_MODEL}' returned ${embedding.length} dims, ` +
         `but EMBEDDING_DIMENSIONS=${DB_DIMENSIONS}. ` +
         `Update EMBEDDING_DIMENSIONS in .env or switch LOCAL_EMBEDDING_MODEL to a compatible model.`
       );
@@ -168,7 +168,7 @@ async function extractMetadata(text) {
 }
 
 // Parse Obsidian file content (splits frontmatter, tags, links)
-function parseObsidianFile(filePath) {
+export function parseObsidianFile(filePath) {
   const fileContent = readFileSync(filePath, 'utf-8');
   const title = basename(filePath, '.md');
   
@@ -227,7 +227,7 @@ function parseObsidianFile(filePath) {
 }
 
 // Chunk note by H2 boundaries
-function chunkNote(title, content) {
+export function chunkNote(title, content) {
   const sections = content.split(/\n## /);
   const chunks = [];
 
@@ -349,6 +349,8 @@ async function processFile(filePath) {
       console.error(`      ❌ Error upserting thought: ${rpcErr.message}`);
       continue;
     }
+
+    const thoughtId = result.id;
 
     // Inject embedding directly (upsert_thought handles fingerprinting, but not embedding vector directly in conflict updates)
     const { error: updateErr } = await supabase
@@ -512,13 +514,16 @@ Return ONLY a valid JSON array, no markdown or wrapper code.`
 
 // --- Runner ---
 const args = process.argv.slice(2);
-if (args.length === 0) {
-  console.log('❌ Error: Please specify the absolute file path of the Obsidian note.');
-  console.log('   Usage: node process-file.js "/path/to/vault/Note.md"');
-  process.exit(1);
-}
 
-processFile(args[0]).catch(err => {
-  console.error('Fatal error in process:', err);
-  process.exit(1);
-});
+if (import.meta.url === "file://" + process.argv[1]) {
+  if (args.length === 0) {
+    console.log('❌ Error: Please specify the absolute file path of the Obsidian note.');
+    console.log('   Usage: node process-file.js "/path/to/vault/Note.md"');
+    process.exit(1);
+  }
+
+  processFile(args[0]).catch(err => {
+    console.error('Fatal error in process:', err);
+    process.exit(1);
+  });
+}

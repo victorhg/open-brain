@@ -170,7 +170,7 @@ async function handleTool(name: string, args: any): Promise<string> {
   switch (name) {
     case "search_thoughts": {
       const embedding = await generateEmbedding(args.query);
-      const { data, error } = await supabase.rpc("match_thoughts", {
+      const { data, error } = await supabase.rpc("match_thoughts_v2", {
         query_embedding: embedding,
         match_threshold: args.threshold ?? 0.3,
         match_count: args.limit ?? 10,
