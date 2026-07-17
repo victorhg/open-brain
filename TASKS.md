@@ -2,7 +2,7 @@
 
 > Completed work has moved to [`HISTORY.md`](./HISTORY.md). This file tracks **undone work only**.
 >
-> **Status:** Phase A (query engine) → **IN PROGRESS** 🔧
+> **Status:** Phase B (Knowledge Graph) → **IN PROGRESS** 🔧
 > **Constraint:** OpenBrain runs **fully local**. All inference goes through `LOCAL_LLM_BASE_URL`
 > (OpenAI-compatible). No cloud LLM providers. OpenRouter is disabled in `.env`.
 
@@ -25,60 +25,10 @@ This roadmap merges two visions:
 
 ## What's missing (priority-ordered snapshot)
 
-- **P0 — Query Engine finish:** grounding prompt hardening, context assembler, recipe extraction.
-- **P0 — Full-local hardening:** remove residual OpenRouter fallback branches.
 - **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
 - **Deferred — NateOB1-sourced tasks:** extensions, imports, dashboard, capture, advanced recipes. Repo available; start after P2.
-
----
-
-# P0 · Phase A — Query Engine Foundation 🔧
-
-> **Vision (ArchDoc):** a full 3-stage retrieval pipeline — semantic search → context assembly →
-> grounded local generation. Every answer cites sources. Hallucination is explicitly blocked.
-
----
-
-### Task 0.1: Build Unified CLI Tool (The "Brain" Router)
-**Objective:** Replace disparate `bin/` scripts with a single entry point to prevent "CLI drift" and centralize configuration/error handling.
-**Steps:**
-1. Create `cli/brain.js` using a CLI framework (e.g., `commander`).
-2. Route commands: `brain query`, `brain find-relations`, `brain ingest`.
-3. Centralize flag handling (`--limit`, `--strict`, etc.) so they are consistent across all sub-commands.
-4. Replace `bin/` shims with calls to the unified CLI.
-**Time:** 2 hours | **Files:** `cli/`, `bin/` (update/cleanup)
-
-### Task A.2: Grounding Prompt Hardening ✅ **Done**
-### Task A.3: Build `lib/context-assembler.js` ✅ **Done**
-### Task A.4: Promote Tools to Recipes ✅ **Done**
-
----
-
-# P0 · Full-Local Hardening
-
-### Task L.1: Strip Residual OpenRouter Fallback ✅ **Done — see HISTORY.md** ✅ **Done — see HISTORY.md**
-
-**Objective:** OpenBrain is fully local — remove all cloud LLM fallback branches.
-
-**Current state:** `OPENROUTER_API_KEY` is commented out in `.env` ✅, but
-`integrations/obsidian-listener/process-file.js` still contains OpenRouter fallback code for both
-embeddings and metadata extraction.
-
-**Steps:**
-1. In `integrations/obsidian-listener/process-file.js`, remove the OpenRouter branches for:
-   - embedding generation (drop the `openrouter.ai/.../embeddings` path),
-   - metadata extraction (drop the `openrouter.ai/.../chat/completions` path).
-   Fail loudly if `LOCAL_LLM_BASE_URL` is unreachable — no silent cloud fallback.
-2. Audit `bin/`, `recipes/`, `integrations/` for any other `openrouter` references and remove them.
-3. Update `integrations/obsidian-listener/README.md` to state it is local-only.
-
-**Acceptance Test:**
-```bash
-grep -rin "openrouter" bin/ recipes/ integrations/   # → no matches in executable code paths
-```
-**Time:** 1 hour | **Files:** `integrations/obsidian-listener/process-file.js`, README
 
 ---
 
@@ -101,7 +51,7 @@ thoughts by title, insert deterministic edges (`confidence = 1.0`, `edge_source 
 **Depends:** B.1 | **Time:** 2 hours | **Files:** `bin/extract-wikilink-edges.js`
 
 ### Task B.3: Local Entity Extraction Worker (LLM)
-Build `integrations/entity-extraction-worker/` **from scratch** (NateOB1 recipe unavailable locally).
+Build `integrations/entity-extraction-worker/` **from scratch**.
 For each thought, call the local LLM for structured JSON `{entities[], relations[]}`; normalize entity
 names; insert edges with `confidence >= 0.7`, `edge_source = 'prose_extraction'`. Pilot 50 thoughts,
 tune prompt, then run full batch as a background job. Add as a post-ingest step in obsidian-listener.
@@ -126,7 +76,7 @@ Include the `match_wiki_pages` RPC. Embedding dim must equal `EMBEDDING_DIMENSIO
 **Time:** 30 min
 
 ### Task C.2: Build Wiki Synthesis Engine (local)
-Build `recipes/wiki-synthesis/` and `recipes/entity-wiki/` **from scratch** (NateOB1 unavailable),
+Build `recipes/wiki-synthesis/` and `recipes/entity-wiki/` **from scratch**,
 plus a unified entry point `bin/build-wiki.js` (`--type entity|synthesis`, `--slug <slug>`, `--limit`).
 Entity pages: pull top entities from `graph_edges`, gather related chunks, synthesize + embed via local LLM.
 Pilot the 20 most-connected entities; verify quality in Supabase.
@@ -169,7 +119,7 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# Deferred — NateOB1 Reference Tasks (repo available at `/tmp/NateBJones-OB1`)
+# Deferred — NateOB1 Reference Tasks
 
 > Reference repo cloned at **`/tmp/NateBJones-OB1`**. Tasks below can now be executed.
 > Priority is intentionally **after P0–P2** — build the local-first engine first, then layer extensions on top.
@@ -192,13 +142,6 @@ Wire `open-brain-mcp` to Cursor/Claude Code for in-editor knowledge-graph access
 
 ## Success Metrics
 
-**Phase A complete (query engine):**
-- ✓ Every `--answer` response cites source note titles in `[brackets]`.
-- ✓ `lib/context-assembler.js` in place with stub hooks for graph + wiki.
-- ✓ No hallucination on out-of-context queries.
-- ✓ `query-brain` / `find-relations` live as standalone recipes.
-- ✓ No OpenRouter references remain in executable code.
-
 **Phase B complete (graph):**
 - ✓ `graph_edges` deployed; ≥ 5,000 wikilink edges (confidence 1.0); ≥ 10,000 prose edges (≥ 0.7).
 - ✓ `--graph` expands retrieval via 1-hop traversal.
@@ -216,26 +159,16 @@ Wire `open-brain-mcp` to Cursor/Claude Code for in-editor knowledge-graph access
 
 ## Immediate Next Actions
 
-1. **0.1** — build unified CLI tool. ~2 h
-2. **A.2** — harden grounding prompt (system role + citations + `--strict`). ~1 h
-3. **A.3** — extract `lib/context-assembler.js`. ~1.5 h
-4. **A.4** — promote `query-brain` / `find-relations` into recipes. ~1.5 h
-5. **L.1** — strip OpenRouter fallback from obsidian-listener. ~1 h
-6. Then **B.1 → B.2** to start the graph layer.
+1. **B.1** — Deploy `graph_edges` schema. ~30 min
+2. **B.2** — Wikilink Edge Extractor (no LLM). ~2 h
+3. **B.3** — Local Entity Extraction Worker. ~4 h
+4. **B.4** — Graph Traversal in Context Assembler. ~2 h
 
-**Time to Phase A + full-local complete:** ~7 hours focused work.
-**Time to Phase B + C complete:** ~15 additional hours.
-**Time to Phase D complete:** ~5 additional hours.
+**Time to Phase B complete:** ~8.5 hours.
 
 ---
 
 ## Future Improvements
 
-- **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`. Currently, ingestion scripts contain too much logic (parsing, embedding, DB writing), making testing and schema migration difficult. Decoupling ensures that database transaction logic is centralized and independent of the ingestion source.
-- **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status` to prevent race conditions during concurrent ingestion (e.g., watcher vs. manual import). Add a validation step in the ingestion path that checks against canonical schemas to ensure data integrity before committing to the `thoughts` table.
-
----
-
-**Last Updated:** 2026-07-16
-**Status:** Phase A — IN PROGRESS
-**Maintainer:** OB1 Orchestrator (pi)
+- **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`.
+- **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status`.
