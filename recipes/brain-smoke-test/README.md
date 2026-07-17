@@ -246,3 +246,23 @@ Solution: Your `public.thoughts` table is missing one of the canonical columns (
 
 **Issue: `MCP search_thoughts finds test row` fails even though capture succeeded**
 Solution: Embedding generation is asynchronous in some setups and may not land before search runs. The check already retries once with a 1.5 s delay; if it still fails, check the Edge Function logs in the Supabase dashboard for OpenRouter errors (missing or rate-limited key).
+
+## Automating Smoke Tests
+
+The smoke test is designed to be integrated into development workflows to prevent regressions when modifying schema or edge functions:
+
+### Local Alias
+Add a shortcut to your shell config (e.g., `.bashrc` or `.zshrc`):
+```bash
+alias brain-verify="node recipes/brain-smoke-test/smoke-all.js"
+```
+
+### CI/CD Integration
+The script returns non-zero exit codes on failure (`Result: FAIL`). This allows it to serve as a gatekeeper in CI pipelines. 
+
+To run in CI without incurring costs or mutating data (using non-destructive checks only):
+```bash
+node recipes/brain-smoke-test/smoke-all.js --json > test-results.json
+# Or simple fail-fast:
+node recipes/brain-smoke-test/smoke-all.js || exit 1
+```

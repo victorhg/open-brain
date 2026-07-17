@@ -20,7 +20,17 @@ Instead of running manual commands, interact with `pi` to manage your brain.
 - `/primitives`: Core logic (RLS, Edge Functions, MCP).
 - `/recipes`: Data import and workflow automation tasks.
   - `obsidian-vault-import`: Local-first enabled tool for syncing Obsidian vaults. (Status: Successfully imported 3909 thoughts.)
+  - `brain-smoke-test`: System integrity harness to verify configuration and health.
 - `/skills`: Reusable agent-logic packs (model-agnostic instructions for your orchestrator).
+
+## Verifying System Health
+To ensure your Open Brain configuration is healthy and fully connected, run the smoke test harness:
+
+```bash
+node recipes/brain-smoke-test/smoke-all.js
+```
+
+This harness probes every live surface (DB, Auth, MCP) and reports on the system's status. For a more detailed breakdown of results and options (like destructive testing), see `recipes/brain-smoke-test/README.md`.
 
 ## 🧠 Agent Operational Knowledge Base
 For technical deep-dives, configuration validation, and API troubleshooting (especially regarding LLM/API keys), please refer to the detailed operational guidelines located at: `recipes/LLM_Configuration_Insights.md`
