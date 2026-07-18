@@ -196,6 +196,45 @@ export BRAIN_ACCESS_KEY="your-mcp-access-key"
 
 **Depends:** P0.1 | **Time:** 30 min
 
+### Task P0.5: Test Harness
+Three-layer test suite for the package. All automated layers must pass before P0 is considered done.
+
+**Layer 1 — HTTP smoke (`packages/pi-open-brain/test/smoke.js`):**
+Standalone Node.js script, same pattern as `recipes/brain-smoke-test/smoke-all.js`.
+- Assert `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY` are present in env (skip all if missing).
+- `thought_stats` → assert response has numeric counts.
+- `search_thoughts` with a fixture query → assert array response with expected shape (`id`, `content`, `similarity`).
+- `list_thoughts` with `limit=1` → assert single-item array.
+- Missing key → assert 401 (security regression check, mirrors MCP smoke test).
+- `capture_thought` skipped by default; opt-in via `--write` flag.
+
+Run: `node packages/pi-open-brain/test/smoke.js`
+
+**Layer 2 — Pi load verification (`packages/pi-open-brain/test/pi-load.js`):**
+Spawns `pi --mode json --no-session --no-builtin-tools -e ./packages/pi-open-brain -p "list your tools"`
+as a subprocess. Parses JSON event stream and asserts:
+- All 4 tools registered: `search_thoughts`, `capture_thought`, `list_thoughts`, `thought_stats`.
+- `open-brain` skill present in loaded skills.
+- Zero extension load errors.
+
+Run: `node packages/pi-open-brain/test/pi-load.js`
+*(Requires pi in PATH and valid model credentials — skipped in CI if unavailable.)*
+
+**Layer 3 — Manual checklist (in `packages/pi-open-brain/README.md`):**
+```
+[ ] "what do my notes say about X?"  → model calls search_thoughts
+[ ] "save this insight: Y"           → model calls capture_thought
+[ ] "how many thoughts do I have?"   → model calls thought_stats
+```
+
+**Integration with existing smoke test:**
+Add a `pi-open-brain` section to `recipes/brain-smoke-test/smoke-all.js` that calls
+`packages/pi-open-brain/test/smoke.js` as a sub-suite. If `BRAIN_MCP_URL` is unset,
+the whole section is skipped (not failed) — same skip pattern already used for
+embedding and RPC tests.
+
+**Depends:** P0.2, P0.3 | **Time:** 1 h | **Files:** `packages/pi-open-brain/test/`
+
 ### Task P0.4: Dev Wiring + Smoke Test
 Install the package into this dev environment (`pi install ./packages/pi-open-brain`).
 Verify tools appear in pi startup header. Run a manual `search_thoughts` and `thought_stats`
@@ -227,8 +266,9 @@ to confirm end-to-end. Add a note to the smoke test README about manual pi verif
 1. **P0.1** — Scaffold `packages/pi-open-brain/`. ~20 min
 2. **P0.2** — Implement extension tools (4 HTTP-backed pi tools). ~1.5 h
 3. **P0.3** — Write `SKILL.md` + `README.md`. ~30 min
-4. **P0.4** — Dev wiring + smoke verification. ~30 min
-5. **B.1** — Deploy `graph_edges` schema. ~30 min *(can run in parallel with P0)*
+4. **P0.5** — Test harness (HTTP smoke + pi load verification + integrate into smoke-all.js). ~1 h
+5. **P0.4** — Dev wiring + final smoke verification. ~30 min
+6. **B.1** — Deploy `graph_edges` schema. ~30 min *(can run in parallel with P0)*
 
 ---
 
