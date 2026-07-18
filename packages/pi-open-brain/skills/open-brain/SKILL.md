@@ -1,3 +1,12 @@
+---
+name: open-brain
+description: |
+  Personal knowledge graph tools for Open Brain / Obsidian vault.
+  Use when the user asks about their notes, past decisions, insights, projects,
+  or anything that might be in their personal second brain. Provides
+  search_thoughts, capture_thought, list_thoughts, and thought_stats tools.
+---
+
 # Open Brain — Personal Knowledge Graph
 
 Use this skill when the user is working in a session where they may want to query or add to their personal knowledge base.

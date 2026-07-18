@@ -844,6 +844,118 @@ const rlsChecks = [
 ];
 
 // ---------------------------------------------------------------------------
+// Category 8: Pi Package — open-brain
+// Verifies the pi-open-brain package HTTP client contract using the same
+// BRAIN_MCP_URL / BRAIN_ACCESS_KEY env vars the package itself reads.
+// Skipped entirely when BRAIN_MCP_URL is not configured.
+// ---------------------------------------------------------------------------
+
+// Resolve BRAIN_MCP_URL: explicit var wins, else derive from SUPABASE_URL.
+const BRAIN_MCP_URL   = env("BRAIN_MCP_URL").replace(/\/+$/, "")
+  || (SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/open-brain-mcp` : "");
+// Resolve BRAIN_ACCESS_KEY: explicit var wins, else reuse MCP_KEY.
+const BRAIN_ACCESS_KEY = env("BRAIN_ACCESS_KEY") || MCP_KEY;
+
+const BRAIN_HEADERS = {
+  "Content-Type": "application/json",
+  "x-brain-key": BRAIN_ACCESS_KEY,
+};
+
+async function brainPost(body, signal) {
+  const res = await fetch(BRAIN_MCP_URL, {
+    method: "POST",
+    headers: BRAIN_HEADERS,
+    body: JSON.stringify(body),
+    signal,
+  });
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
+}
+
+function brainToolText(body) {
+  const text = body?.result?.content?.[0]?.text;
+  if (!text) throw new Error("missing result.content[0].text");
+  return text;
+}
+
+const piPackageChecks = [
+  {
+    name: "BRAIN_MCP_URL configured",
+    fn: async () => {
+      if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set — pi-open-brain checks skipped");
+      if (!BRAIN_ACCESS_KEY) throw new SkipError("BRAIN_ACCESS_KEY not set — pi-open-brain checks skipped");
+      return `url=${BRAIN_MCP_URL}`;
+    },
+  },
+  {
+    name: "pi-open-brain: header-only auth enforced (no query param)",
+    fn: async (s) => {
+      if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set");
+      const url = `${BRAIN_MCP_URL}?key=${encodeURIComponent(BRAIN_ACCESS_KEY)}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+        signal: s,
+      });
+      if (res.status !== 401) throw new Error(`expected 401, got ${res.status}`);
+      return "401 — query-param key correctly rejected";
+    },
+  },
+  {
+    name: "pi-open-brain: thought_stats tool responds",
+    fn: async (s) => {
+      if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set");
+      const { status, body } = await brainPost({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "thought_stats", arguments: {} },
+      }, s);
+      if (status !== 200) throw new Error(`HTTP ${status}`);
+      const text = brainToolText(body);
+      if (!/\d+/.test(text)) throw new Error(`unexpected: ${text}`);
+      return text.slice(0, 80);
+    },
+  },
+  {
+    name: "pi-open-brain: search_thoughts tool responds",
+    fn: async (s) => {
+      if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set");
+      const { status, body } = await brainPost({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "search_thoughts", arguments: { query: "obsidian notes", limit: 3 } },
+      }, s);
+      if (status !== 200) throw new Error(`HTTP ${status}`);
+      const text = brainToolText(body);
+      // search_thoughts requires embedding via LOCAL_LLM_BASE_URL. When the edge
+      // function is deployed to Supabase cloud, it cannot reach 127.0.0.1.
+      // Detect this known condition and skip rather than fail.
+      if (/127\.0\.0\.1|localhost|tcp connect|Connect.*error/i.test(text)) {
+        throw new SkipError(
+          "LOCAL_LLM_BASE_URL (127.0.0.1) unreachable from deployed edge function — " +
+          "expose via Cloudflare Tunnel / Tailscale Funnel to enable search from cloud"
+        );
+      }
+      if (!/found|no matching/i.test(text)) throw new Error(`unexpected: ${text.slice(0, 120)}`);
+      return text.split("\n")[0];
+    },
+  },
+  {
+    name: "pi-open-brain: list_thoughts tool responds",
+    fn: async (s) => {
+      if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set");
+      const { status, body } = await brainPost({
+        jsonrpc: "2.0", id: 1, method: "tools/call",
+        params: { name: "list_thoughts", arguments: { limit: 2 } },
+      }, s);
+      if (status !== 200) throw new Error(`HTTP ${status}`);
+      const text = brainToolText(body);
+      if (!/thought|no thoughts/i.test(text)) throw new Error(`unexpected: ${text.slice(0, 120)}`);
+      return text.split("\n")[0];
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
 // Runner
 // ---------------------------------------------------------------------------
 
@@ -855,6 +967,7 @@ const categories = [
   { name: "Core Features", checks: coreChecks },
   { name: "Access Key Enforcement", checks: accessKeyChecks },
   { name: "Row-Level Security", checks: rlsChecks },
+  { name: "Pi Package: open-brain", checks: piPackageChecks },
 ];
 
 function categoryFilter(name) {
