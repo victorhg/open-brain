@@ -121,4 +121,58 @@ fallback in TASKS.md should the model/dimensions ever change).
 
 ---
 
-**Last Updated:** 2026-07-16
+---
+
+## Security & Embedding Consistency Hardening ✅
+
+### Task S.1: MCP Edge Function — Local LLM Hardening ✅
+**Completed:** 2026-07-18
+
+Applied the L.1 "fully local" principle to `supabase/functions/open-brain-mcp/index.ts`.
+The function previously called OpenRouter (`openai/text-embedding-3-small`, 1536 dims) for all
+embeddings and LLM metadata extraction, making thoughts captured via MCP incommensurable with
+the 3,911 Qwen-2560 vault thoughts. Now fully local.
+
+**Changes:**
+- Removed `OPENROUTER_API_KEY` and all `openrouter.ai` fetch calls.
+- Added `LOCAL_LLM_BASE_URL`, `LOCAL_EMBEDDING_MODEL`, `LOCAL_CHAT_MODEL`, `LOCAL_LLM_API`,
+  `EMBEDDING_DIMENSIONS` read from Supabase secrets via `Deno.env`.
+- Dimension guard added: throws loudly if model returns ≠ `EMBEDDING_DIMENSIONS` dims.
+- Fixed `match_thoughts_v2` → `match_thoughts` (RPC alignment with context-assembler + smoke test).
+- `capture_thought` now uses `upsert_thought` RPC (deduplication via SHA-256 fingerprint),
+  matching the Node.js watcher pattern. Previously used direct `INSERT` (bypassed dedup).
+- Fails loudly if LLM config missing — no cloud fallback.
+- Added deployment note: `LOCAL_LLM_BASE_URL` must be a public URL when deployed to Supabase cloud
+  (e.g. Cloudflare Tunnel, Tailscale Funnel, ngrok). Works as-is for `supabase functions serve`.
+
+**Secrets set on project `aekvtnyciybockeytbmf`:**
+`LOCAL_LLM_BASE_URL`, `LOCAL_EMBEDDING_MODEL`, `LOCAL_CHAT_MODEL`, `EMBEDDING_DIMENSIONS`, `CAPTURE_ENABLED`
+
+**Files:** `supabase/functions/open-brain-mcp/index.ts`
+
+### Task S.2: MCP Edge Function — Security Hardening ✅
+**Completed:** 2026-07-18
+
+Addressed the leaked-key threat model for the internet-facing Edge Function.
+
+**Changes:**
+- **Rate limiter:** 30 req/min per key, sliding-window in-memory (sufficient for personal tool;
+  note: resets on cold start — upgrade to Deno KV for distributed enforcement if needed).
+- **Write kill-switch:** `CAPTURE_ENABLED` secret (default `true`); set to `false` to disable
+  `capture_thought` instantly without redeploying.
+- **Input validation:** `capture_thought` enforces a 20,000-char content cap and type check;
+  `search_thoughts` caps `limit` at 25; `list_thoughts` caps at 50.
+- **Explicit column selection:** all DB reads use named columns — no `SELECT *`.
+- **Auth gate remains primary boundary:** `MCP_ACCESS_KEY` checked before any DB operation.
+  Anon key cannot be used for reads (RLS blocks anon on `thoughts`); `MCP_ACCESS_KEY` is
+  the correct personal-tool access boundary.
+- Bumped `serverInfo.version` → `3.0.0`.
+
+**Files:** `supabase/functions/open-brain-mcp/index.ts`
+
+**Verification:** Auth rejection (401 on missing/wrong key), tools/list, thought_stats all
+confirmed live against `aekvtnyciybockeytbmf`.
+
+---
+
+**Last Updated:** 2026-07-18
