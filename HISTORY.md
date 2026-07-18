@@ -200,4 +200,105 @@ Both subcommands confirmed working from any directory.
 
 ---
 
+## P0 · `pi-open-brain` — Distributable Pi Package ✅
+
+### Task P0.1: Scaffold `packages/pi-open-brain/` ✅
+**Completed:** 2026-07-18 | Commits `bb0489b` → `6a2f6a2`
+
+Created the full package skeleton:
+
+```
+packages/pi-open-brain/
+├── package.json          # "pi-package" keyword, pi manifest, peerDependencies
+├── README.md             # install docs, env vars, manual verification checklist
+├── extensions/
+│   └── index.ts
+└── skills/
+    ├── open-brain/SKILL.md
+    ├── auto-capture/       (moved from root skills/)
+    └── panning-for-gold/   (moved from root skills/)
+```
+
+**Files:** `packages/pi-open-brain/`
+
+### Task P0.2: Implement Extension Tools ✅
+**Completed:** 2026-07-18
+
+Implemented four native pi tools in `extensions/index.ts`. Each tool calls the deployed
+Supabase Edge Function directly via HTTPS JSON-RPC — no MCP protocol layer.
+
+| Tool | Method | Notes |
+|---|---|---|
+| `search_thoughts` | `tools/call` | `query`, `limit`, `threshold` |
+| `capture_thought` | `tools/call` | gated by `CAPTURE_ENABLED` on server |
+| `list_thoughts` | `tools/call` | `limit` param |
+| `thought_stats` | `tools/call` | returns total count |
+
+- Auth: `x-brain-key` header only (no query params).
+- Config: `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY` from env.
+- `session_start` emits a `ctx.ui.notify` warning if env vars are missing — no crash.
+- Typed `McpResponse` interface; graceful HTTP error handling (401, 429, non-ok).
+
+**Files:** `packages/pi-open-brain/extensions/index.ts`
+
+### Task P0.3: Skills + README ✅
+**Completed:** 2026-07-18
+
+**Skills shipped with the package (3 total):**
+- `open-brain/SKILL.md` — core: teaches model when/how to use the 4 tools.
+- `auto-capture/SKILL.md` — behavioral protocol for end-of-session captures; uses `capture_thought` + `search_thoughts`.
+- `panning-for-gold/SKILL.md` — transcript/brain-dump → evaluated idea inventory → Open Brain captures.
+
+Both `auto-capture` and `panning-for-gold` were moved from the root `skills/` directory into
+the package — they require `open_brain: true` and belong with the distributable, not the
+development environment. Broken relative link in `auto-capture/SKILL.md` fixed (repo reference
+replaced with plain URL to the dev repo).
+
+`skills/README.md` added at repo root to establish the boundary: root `skills/` is reserved
+for dev/architecture skills only.
+
+**`README.md`** covers: install commands, required env vars, tool table, test commands,
+manual verification checklist, update/uninstall.
+
+**Files:** `packages/pi-open-brain/skills/`, `packages/pi-open-brain/README.md`, `skills/README.md`
+
+### Task P0.5a: HTTP Smoke Test ✅
+**Completed:** 2026-07-18
+
+Layer 1 of the P0.5 test harness: `packages/pi-open-brain/test/smoke.js`.
+Standalone Node.js script (no pi required). Walks up the directory tree to find `.env`.
+Auto-derives `BRAIN_MCP_URL` from `SUPABASE_URL` if not explicitly set;
+accepts `BRAIN_ACCESS_KEY` or falls back to `MCP_ACCESS_KEY`.
+
+Checks (7 total):
+- Endpoint reachable (OPTIONS)
+- Missing key → 401
+- Wrong key → 401
+- Query-param key → 401 (security regression)
+- `thought_stats` returns numeric count
+- `search_thoughts` returns expected shape
+- `list_thoughts` returns expected shape
+- `capture_thought` + dedup (opt-in via `--write`)
+
+Run: `node packages/pi-open-brain/test/smoke.js`
+
+**Files:** `packages/pi-open-brain/test/smoke.js`
+
+### Architecture boundary documentation ✅
+**Completed:** 2026-07-18 | Commit `1cd0b1c`
+
+Added "Architecture: This Repo vs. `pi-open-brain`" section to root `README.md`.
+Explains the two roles clearly:
+- **This repo** = dev/architecture/evolution environment (schemas, ingestion, CLI, smoke tests,
+  edge function). Never installed anywhere.
+- **`packages/pi-open-brain/`** = the distributable result. The only thing installed on any
+  other machine. Needs only `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY`.
+
+Includes an ASCII boundary diagram showing the call path from the installed package
+through the deployed Supabase edge function.
+
+**Files:** `README.md`
+
+---
+
 **Last Updated:** 2026-07-18

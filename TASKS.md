@@ -2,7 +2,7 @@
 
 > Completed work has moved to [`HISTORY.md`](./HISTORY.md). This file tracks **undone work only**.
 >
-> **Status:** Phase B (Knowledge Graph) → **IN PROGRESS** 🔧
+> **Status:** P0 (`pi-open-brain` package) → **NEARLY DONE** 🔧 — P0.1–P0.3 complete, P0.5 partial, P0.4 pending
 > **Constraint:** OpenBrain runs **fully local**. All inference goes through `LOCAL_LLM_BASE_URL`
 > (OpenAI-compatible). No cloud LLM providers. OpenRouter is disabled in `.env`.
 
@@ -25,7 +25,7 @@ This roadmap merges two visions:
 
 ## What's missing (priority-ordered snapshot)
 
-- **P0 — `pi-open-brain` package:** Native pi tools for the knowledge graph. Distributable to any pi instance.
+- **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ✅ · pi-load.js test + smoke-all.js integration + live wiring still pending.
 - **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
@@ -133,107 +133,31 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# P0 · `pi-open-brain` — Distributable Pi Package
+# P0 · `pi-open-brain` — Distributable Pi Package *(nearly done)*
 
-> **Vision:** OpenBrain is not just a personal tool — it is a reusable layer any pi instance can
-> install. The `pi-open-brain` package turns the Supabase knowledge graph into first-class pi tools,
-> so the AI assistant can search, capture, and reason over your Obsidian vault without leaving pi.
->
-> **Distribution model:** Developed here (`packages/pi-open-brain/`) as the canonical dev environment.
-> Published via git (`pi install git:github.com/you/openbrain`) or npm. Any pi instance that has
-> `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY` in env can install it and get full knowledge-graph access.
+> P0.1, P0.2, P0.3 complete. Remaining: pi-load.js test, smoke-all.js integration, live install.
 
-### Task P0.1: Scaffold `packages/pi-open-brain/`
-Create the package skeleton with a proper `package.json` (`pi-package` keyword + `pi` manifest),
-empty `extensions/index.ts` entry point, and a `skills/open-brain/SKILL.md` that teaches the model
-when and how to use the knowledge-graph tools. No functional code yet — just the structure.
+### Task P0.5: Test Harness — remaining work
+**Layer 1 (smoke.js) ✅ done.** **Layer 3 (manual checklist in README) ✅ done.**
 
-```
-packages/pi-open-brain/
-├── package.json          # "pi-package" keyword, pi manifest, peerDeps
-├── README.md             # install + env var docs
-├── extensions/
-│   └── index.ts          # registers tools + optional before_agent_start context injection
-└── skills/
-    └── open-brain/
-        └── SKILL.md      # when/how to use search_thoughts, capture_thought, etc.
-```
-
-**Depends:** none | **Time:** 20 min
-
-### Task P0.2: Implement Extension Tools
-Implement the four core tools in `extensions/index.ts`. Each tool calls the deployed Supabase
-Edge Function directly over HTTPS — no MCP protocol layer.
-
-| Tool | Edge Function action | Notes |
-|---|---|---|
-| `search_thoughts` | `search_thoughts` | `query`, `limit`, `threshold` params |
-| `capture_thought` | `capture_thought` | gated by `CAPTURE_ENABLED` secret on server |
-| `list_thoughts` | `list_thoughts` | `limit`, `offset`, `tag` filter |
-| `thought_stats` | `thought_stats` | returns counts by tag/status |
-
-Config reads from env: `BRAIN_MCP_URL` (Edge Function URL), `BRAIN_ACCESS_KEY` (sent as
-`x-brain-key` header — header-only auth, no query params).
-
-If env vars are missing at `session_start`, emit a `ctx.ui.notify` warning (no crash).
-
-**Depends:** P0.1 | **Time:** 1.5 h | **Files:** `packages/pi-open-brain/extensions/index.ts`
-
-### Task P0.3: Write `SKILL.md` + `README.md`
-Write `skills/open-brain/SKILL.md` — loaded automatically by pi when installed. Teaches the
-model: when to call `search_thoughts` before answering knowledge questions, when to call
-`capture_thought` to persist a new insight, and how to interpret results.
-
-Write `README.md` with install instructions:
-```bash
-# Install from this repo
-pi install git:github.com/you/openbrain
-
-# Required env vars (add to shell profile or .env)
-export BRAIN_MCP_URL="https://<project>.supabase.co/functions/v1/open-brain-mcp"
-export BRAIN_ACCESS_KEY="your-mcp-access-key"
-```
-
-**Depends:** P0.1 | **Time:** 30 min
-
-### Task P0.5: Test Harness
-Three-layer test suite for the package. All automated layers must pass before P0 is considered done.
-
-**Layer 1 — HTTP smoke (`packages/pi-open-brain/test/smoke.js`):**
-Standalone Node.js script, same pattern as `recipes/brain-smoke-test/smoke-all.js`.
-- Assert `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY` are present in env (skip all if missing).
-- `thought_stats` → assert response has numeric counts.
-- `search_thoughts` with a fixture query → assert array response with expected shape (`id`, `content`, `similarity`).
-- `list_thoughts` with `limit=1` → assert single-item array.
-- Missing key → assert 401 (security regression check, mirrors MCP smoke test).
-- `capture_thought` skipped by default; opt-in via `--write` flag.
-
-Run: `node packages/pi-open-brain/test/smoke.js`
+**Still needed:**
 
 **Layer 2 — Pi load verification (`packages/pi-open-brain/test/pi-load.js`):**
-Spawns `pi --mode json --no-session --no-builtin-tools -e ./packages/pi-open-brain -p "list your tools"`
-as a subprocess. Parses JSON event stream and asserts:
+Use the pi SDK (dynamically imported from global npm root) to load the extension without
+calling the LLM. Assert:
 - All 4 tools registered: `search_thoughts`, `capture_thought`, `list_thoughts`, `thought_stats`.
-- `open-brain` skill present in loaded skills.
-- Zero extension load errors.
+- `open-brain` skill visible.
+- Zero extension load errors in `extensionsResult.errors`.
 
 Run: `node packages/pi-open-brain/test/pi-load.js`
-*(Requires pi in PATH and valid model credentials — skipped in CI if unavailable.)*
+*(Requires pi installed globally — skipped if `@earendil-works/pi-coding-agent` not found.)*
 
-**Layer 3 — Manual checklist (in `packages/pi-open-brain/README.md`):**
-```
-[ ] "what do my notes say about X?"  → model calls search_thoughts
-[ ] "save this insight: Y"           → model calls capture_thought
-[ ] "how many thoughts do I have?"   → model calls thought_stats
-```
+**smoke-all.js integration:**
+Add a `Pi Package: open-brain` category to `recipes/brain-smoke-test/smoke-all.js`.
+Delegate to `packages/pi-open-brain/test/smoke.js` checks inline (no subprocess).
+Skip category cleanly when `BRAIN_MCP_URL` is unset — same pattern as other optional categories.
 
-**Integration with existing smoke test:**
-Add a `pi-open-brain` section to `recipes/brain-smoke-test/smoke-all.js` that calls
-`packages/pi-open-brain/test/smoke.js` as a sub-suite. If `BRAIN_MCP_URL` is unset,
-the whole section is skipped (not failed) — same skip pattern already used for
-embedding and RPC tests.
-
-**Depends:** P0.2, P0.3 | **Time:** 1 h | **Files:** `packages/pi-open-brain/test/`
+**Depends:** P0.2, P0.3 ✅ | **Time:** 45 min | **Files:** `packages/pi-open-brain/test/pi-load.js`, `recipes/brain-smoke-test/smoke-all.js`
 
 ### Task P0.4: Dev Wiring + Smoke Test
 Install the package into this dev environment (`pi install ./packages/pi-open-brain`).
@@ -263,12 +187,9 @@ to confirm end-to-end. Add a note to the smoke test README about manual pi verif
 
 ## Immediate Next Actions
 
-1. **P0.1** — Scaffold `packages/pi-open-brain/`. ~20 min
-2. **P0.2** — Implement extension tools (4 HTTP-backed pi tools). ~1.5 h
-3. **P0.3** — Write `SKILL.md` + `README.md`. ~30 min
-4. **P0.5** — Test harness (HTTP smoke + pi load verification + integrate into smoke-all.js). ~1 h
-5. **P0.4** — Dev wiring + final smoke verification. ~30 min
-6. **B.1** — Deploy `graph_edges` schema. ~30 min *(can run in parallel with P0)*
+1. **P0.5** — Finish test harness: `pi-load.js` + smoke-all.js integration. ~45 min
+2. **P0.4** — Live install (`pi install ./packages/pi-open-brain`) + end-to-end verification. ~30 min
+3. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked, can start after P0 closes)*
 
 ---
 
