@@ -175,4 +175,29 @@ confirmed live against `aekvtnyciybockeytbmf`.
 
 ---
 
+## CLI Hardening ✅
+
+### Task A.5: Fix `brain` CLI Binary Registration ✅
+**Completed:** 2026-07-18 | Commit `bb0489b`
+
+`brain query` and `brain find-relations` were silently broken — running `brain` would fail
+because the root `package.json` had no `bin` field and `cli/brain.js` lacked a shebang.
+
+**Changes:**
+- Added `#!/usr/bin/env node` shebang as line 1 of `cli/brain.js`.
+- Added `"bin": {"brain": "cli/brain.js"}` field to root `package.json`.
+- Made `cli/brain.js` executable (`chmod +x`).
+- Registered globally via `npm link`.
+
+**Verification:**
+```
+brain query --help       → Usage: brain query [options] <query> ...
+brain find-relations --help → Usage: brain find-relations [options] <conceptA> <conceptB> ...
+```
+Both subcommands confirmed working from any directory.
+
+**Files:** `cli/brain.js`, `package.json`
+
+---
+
 **Last Updated:** 2026-07-18
