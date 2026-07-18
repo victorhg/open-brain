@@ -65,22 +65,51 @@ const watcher = chokidar.watch(resolvedVaultPath, {
 
 const scriptPath = join(__dirname, 'process-file.js');
 
+// ---------------------------------------------------------------------------
+// Serial processing queue
+//
+// The old design called exec() fire-and-forget: rapid saves on the same note
+// (autosave, sync conflicts) launched multiple overlapping process-file.js
+// processes, causing duplicate LLM calls and race conditions on upsert_thought.
+//
+// The queue serialises every event:
+//   - One process-file.js runs at a time.
+//   - If the same file path is already queued, the duplicate is dropped.
+//   - Queue depth is logged so the user can see backpressure at a glance.
+// ---------------------------------------------------------------------------
+
+let queue = Promise.resolve();
+let queueDepth = 0;
+const pendingPaths = new Set();
+
 function syncFile(filePath) {
-  console.log(`\n🔔 Change detected in: ${filePath}`);
-  
-  const cmd = `node "${scriptPath}" "${filePath}"`;
-  exec(cmd, (error, stdout, stderr) => {
-    if (error) {
-      console.error(`❌ Error executing process-file: ${error.message}`);
-      return;
-    }
-    if (stderr) {
-      console.error(`⚠️ process stderr: ${stderr}`);
-    }
-    if (stdout) {
-      console.log(stdout.trim());
-    }
-  });
+  if (pendingPaths.has(filePath)) {
+    console.log(`\n⏩ Already queued — skipping duplicate: ${filePath}`);
+    return;
+  }
+
+  pendingPaths.add(filePath);
+  queueDepth++;
+  console.log(`\n🔔 Queued: ${filePath} (queue depth: ${queueDepth})`);
+
+  queue = queue
+    .then(() => new Promise((resolve) => {
+      console.log(`\n▶️  Processing: ${filePath} (${queueDepth} in queue)`);
+      const cmd = `node "${scriptPath}" "${filePath}"`;
+      exec(cmd, (error, stdout, stderr) => {
+        pendingPaths.delete(filePath);
+        queueDepth--;
+        if (error) console.error(`❌ Error executing process-file: ${error.message}`);
+        if (stderr)  console.error(`⚠️  process-file stderr: ${stderr.trim()}`);
+        if (stdout)  console.log(stdout.trim());
+        resolve();
+      });
+    }))
+    .catch((err) => {
+      pendingPaths.delete(filePath);
+      queueDepth = Math.max(0, queueDepth - 1);
+      console.error(`❌ Queue error for ${filePath}: ${err.message}`);
+    });
 }
 
 watcher

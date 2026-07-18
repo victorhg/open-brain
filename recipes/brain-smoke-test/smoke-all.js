@@ -529,7 +529,7 @@ const authChecks = [
     },
   },
   {
-    name: "MCP accepts correct access key (?key=)",
+    name: "MCP rejects key in query param (?key= leaks to logs; header required)",
     fn: async (s) => {
       const res = await fetch(`${MCP_URL}?key=${encodeURIComponent(MCP_KEY)}`, {
         method: "POST",
@@ -537,8 +537,11 @@ const authChecks = [
         body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
         signal: s,
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return `HTTP ${res.status}`;
+      if (res.status === 401 || res.status === 403)
+        return `HTTP ${res.status} (correctly rejected — query-param auth disabled)`;
+      throw new Error(
+        `expected 401/403, got HTTP ${res.status} — query-param auth is still active`
+      );
     },
   },
 ];

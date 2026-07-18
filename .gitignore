@@ -5,6 +5,8 @@ __pycache__/
 thoughts-dump.json
 obsidian-parse-cache.json
 obsidian-sync-log.json
+recipes/obsidian-vault-import/obsidian-parse-cache.json
+recipes/obsidian-vault-import/obsidian-sync-log.json
 .last-session
 .vscode
 .env.local

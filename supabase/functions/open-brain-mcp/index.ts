@@ -493,8 +493,11 @@ async function handleMcpRequest(body: {
 
 Deno.serve(async (req: Request): Promise<Response> => {
   // ── Authentication ────────────────────────────────────────────────────────
-  const url = new URL(req.url);
-  const key = url.searchParams.get("key") ?? req.headers.get("x-brain-key") ?? "";
+  // Header-only: the key must be supplied as x-brain-key.
+  // Query-param (?key=) is intentionally NOT accepted — URL query params
+  // appear in server access logs, CDN logs, and Referer headers, which would
+  // silently leak the key to anyone with log access.
+  const key = req.headers.get("x-brain-key") ?? "";
 
   if (!key || key !== MCP_ACCESS_KEY) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
@@ -511,10 +514,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
+  const url = new URL(req.url);
+
   // ── SSE endpoint (GET) — client discovery ─────────────────────────────────
   if (req.method === "GET") {
     const sessionId = crypto.randomUUID();
-    const postUrl   = `${url.pathname}?key=${encodeURIComponent(MCP_ACCESS_KEY)}&sessionId=${sessionId}`;
+    // The key is intentionally omitted from the postUrl — clients must send
+    // the x-brain-key header on their POST requests instead.
+    const postUrl   = `${url.pathname}?sessionId=${sessionId}`;
     const stream = new ReadableStream({
       start(controller) {
         controller.enqueue(

@@ -22,6 +22,7 @@ import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join, basename, extname } from 'path';
 import crypto from 'crypto';
+import { load as yamlLoad } from 'js-yaml';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -174,25 +175,22 @@ export function parseObsidianFile(filePath) {
   
   let content = fileContent;
   let frontmatter = {};
-  
-  // 1. Parse YAML Frontmatter
-  const frontmatterMatch = fileContent.match(/^---\n([\s\S]*?)\n---\n/);
+
+  // 1. Parse YAML Frontmatter via js-yaml.
+  //    The old hand-rolled parser broke on: nested keys, values with colons,
+  //    multi-line strings, native YAML arrays, and quoted scalars.
+  const frontmatterMatch = fileContent.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n/);
   if (frontmatterMatch) {
-    const yaml = frontmatterMatch[1];
+    try {
+      const parsed = yamlLoad(frontmatterMatch[1]);
+      frontmatter = (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        ? parsed
+        : {};
+    } catch (yamlErr) {
+      console.warn(`⚠️ YAML frontmatter parse error in ${basename(filePath)}: ${yamlErr.message}. Using empty frontmatter.`);
+      frontmatter = {};
+    }
     content = fileContent.substring(frontmatterMatch[0].length);
-    yaml.split('\n').forEach(line => {
-      const parts = line.split(':');
-      if (parts.length >= 2) {
-        const key = parts[0].trim();
-        const value = parts.slice(1).join(':').trim();
-        // Parse simple string or list arrays
-        if (value.startsWith('[') && value.endsWith(']')) {
-          frontmatter[key] = value.slice(1, -1).split(',').map(v => v.trim().replace(/^['"]|['"]$/g, ''));
-        } else {
-          frontmatter[key] = value.replace(/^['"]|['"]$/g, '');
-        }
-      }
-    });
   }
 
   // 2. Extract inline #tags
@@ -216,11 +214,19 @@ export function parseObsidianFile(filePath) {
     }
   }
 
+  // Normalize tag sources — js-yaml returns a native JS array for YAML list
+  // syntax but a bare string for a scalar value (e.g. `tags: todo`).
+  const toTagArray = (val) => {
+    if (!val) return [];
+    if (Array.isArray(val)) return val.map(String);
+    return [String(val)];
+  };
+
   // Consolidate tags
   const tags = Array.from(new Set([
-    ...(frontmatter.tags || []),
-    ...(frontmatter.keywords || []),
-    ...inlineTags
+    ...toTagArray(frontmatter.tags),
+    ...toTagArray(frontmatter.keywords),
+    ...inlineTags,
   ]));
 
   return { title, content, frontmatter, tags, wikilinks };
@@ -310,18 +316,14 @@ async function processFile(filePath) {
   for (const chunk of chunks) {
     const fullContent = `[Obsidian: ${chunk.header}]\n\n${chunk.body}`;
     const fingerprint = computeFingerprint(fullContent);
-    
+
     console.log(`   ⚡ Processing chunk: "${chunk.header}"`);
     console.log(`      Content Fingerprint: ${fingerprint}`);
 
-    // Generate embedding via local LLM
-    const embedding = await generateEmbedding(fullContent);
-    if (!embedding) continue;
-
-    // Call LLM for smart metadata tags
+    // 1. Extract metadata first (non-critical — has a safe fallback value)
     const llmMeta = await extractMetadata(chunk.body);
-    
-    // Merge Obsidian metadata with LLM tags
+
+    // 2. Merge Obsidian metadata with LLM tags
     const mergedMetadata = {
       source: 'obsidian',
       title: title,
@@ -334,7 +336,9 @@ async function processFile(filePath) {
       category: llmMeta.category
     };
 
-    // Insert or Conflict-Update (Deduplicate)
+    // 3. Upsert the thought — always persist the text content, even if
+    //    embedding generation fails later. A thought without an embedding is
+    //    still searchable via text and carries all its metadata.
     const payload = {
       metadata: mergedMetadata,
       status: (llmMeta.type === 'task' || llmMeta.type === 'idea') ? 'new' : null
@@ -352,19 +356,37 @@ async function processFile(filePath) {
 
     const thoughtId = result.id;
 
-    // Inject embedding directly (upsert_thought handles fingerprinting, but not embedding vector directly in conflict updates)
-    const { error: updateErr } = await supabase
-      .from('thoughts')
-      .update({ embedding })
-      .eq('id', thoughtId);
+    // 4. Generate embedding via local LLM
+    const embedding = await generateEmbedding(fullContent);
 
-    if (updateErr) {
-      console.warn(`      ⚠️ Failed to save embedding vector: ${updateErr.message}`);
+    if (!embedding) {
+      // Wire to workflow-status: mark the thought so it shows up in
+      // status=eq.embedding_failed queries and can be bulk-retried later.
+      const { error: statusErr } = await supabase
+        .from('thoughts')
+        .update({ status: 'embedding_failed', status_updated_at: new Date().toISOString() })
+        .eq('id', thoughtId);
+      if (statusErr) {
+        console.warn(`      ⚠️ Could not mark embedding_failed status: ${statusErr.message}`);
+      } else {
+        console.warn(`      ⚠️ Thought ${thoughtId} saved without embedding — marked 'embedding_failed' for retry.`);
+        console.warn(`         Retry query: status=eq.embedding_failed`);
+      }
     } else {
-      console.log(`      ✅ Thought Upserted (UUID: ${thoughtId})`);
+      // 5. Store embedding vector
+      const { error: updateErr } = await supabase
+        .from('thoughts')
+        .update({ embedding })
+        .eq('id', thoughtId);
+
+      if (updateErr) {
+        console.warn(`      ⚠️ Failed to save embedding vector: ${updateErr.message}`);
+      } else {
+        console.log(`      ✅ Thought Upserted (UUID: ${thoughtId})`);
+      }
     }
 
-    // Build Provenance Chains / Derivation Chains if we found wikilink parent IDs!
+    // 6. Build Provenance Chains — runs regardless of embedding outcome
     if (parentIds.length > 0) {
       console.log(`      🔗 Writing provenance chain connections to metadata...`);
       await supabase
