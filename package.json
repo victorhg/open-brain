@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "description": "Open Brain personal context workspace",
+  "bin": {
+    "brain": "cli/brain.js"
+  },
   "scripts": {
     "query": "node bin/query-brain.js"
   },
