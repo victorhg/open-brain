@@ -25,6 +25,7 @@ This roadmap merges two visions:
 
 ## What's missing (priority-ordered snapshot)
 
+- **P0 — `pi-open-brain` package:** Native pi tools for the knowledge graph. Distributable to any pi instance.
 - **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
@@ -132,11 +133,75 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# P0 · Also Worth Doing Post-Phase A (unblocked, local)
+# P0 · `pi-open-brain` — Distributable Pi Package
 
-### Configure Cursor / Claude Code MCP Integration
-Wire `open-brain-mcp` to Cursor/Claude Code for in-editor knowledge-graph access.
-**Depends:** Phase A | **Time:** 30 min
+> **Vision:** OpenBrain is not just a personal tool — it is a reusable layer any pi instance can
+> install. The `pi-open-brain` package turns the Supabase knowledge graph into first-class pi tools,
+> so the AI assistant can search, capture, and reason over your Obsidian vault without leaving pi.
+>
+> **Distribution model:** Developed here (`packages/pi-open-brain/`) as the canonical dev environment.
+> Published via git (`pi install git:github.com/you/openbrain`) or npm. Any pi instance that has
+> `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY` in env can install it and get full knowledge-graph access.
+
+### Task P0.1: Scaffold `packages/pi-open-brain/`
+Create the package skeleton with a proper `package.json` (`pi-package` keyword + `pi` manifest),
+empty `extensions/index.ts` entry point, and a `skills/open-brain/SKILL.md` that teaches the model
+when and how to use the knowledge-graph tools. No functional code yet — just the structure.
+
+```
+packages/pi-open-brain/
+├── package.json          # "pi-package" keyword, pi manifest, peerDeps
+├── README.md             # install + env var docs
+├── extensions/
+│   └── index.ts          # registers tools + optional before_agent_start context injection
+└── skills/
+    └── open-brain/
+        └── SKILL.md      # when/how to use search_thoughts, capture_thought, etc.
+```
+
+**Depends:** none | **Time:** 20 min
+
+### Task P0.2: Implement Extension Tools
+Implement the four core tools in `extensions/index.ts`. Each tool calls the deployed Supabase
+Edge Function directly over HTTPS — no MCP protocol layer.
+
+| Tool | Edge Function action | Notes |
+|---|---|---|
+| `search_thoughts` | `search_thoughts` | `query`, `limit`, `threshold` params |
+| `capture_thought` | `capture_thought` | gated by `CAPTURE_ENABLED` secret on server |
+| `list_thoughts` | `list_thoughts` | `limit`, `offset`, `tag` filter |
+| `thought_stats` | `thought_stats` | returns counts by tag/status |
+
+Config reads from env: `BRAIN_MCP_URL` (Edge Function URL), `BRAIN_ACCESS_KEY` (sent as
+`x-brain-key` header — header-only auth, no query params).
+
+If env vars are missing at `session_start`, emit a `ctx.ui.notify` warning (no crash).
+
+**Depends:** P0.1 | **Time:** 1.5 h | **Files:** `packages/pi-open-brain/extensions/index.ts`
+
+### Task P0.3: Write `SKILL.md` + `README.md`
+Write `skills/open-brain/SKILL.md` — loaded automatically by pi when installed. Teaches the
+model: when to call `search_thoughts` before answering knowledge questions, when to call
+`capture_thought` to persist a new insight, and how to interpret results.
+
+Write `README.md` with install instructions:
+```bash
+# Install from this repo
+pi install git:github.com/you/openbrain
+
+# Required env vars (add to shell profile or .env)
+export BRAIN_MCP_URL="https://<project>.supabase.co/functions/v1/open-brain-mcp"
+export BRAIN_ACCESS_KEY="your-mcp-access-key"
+```
+
+**Depends:** P0.1 | **Time:** 30 min
+
+### Task P0.4: Dev Wiring + Smoke Test
+Install the package into this dev environment (`pi install ./packages/pi-open-brain`).
+Verify tools appear in pi startup header. Run a manual `search_thoughts` and `thought_stats`
+to confirm end-to-end. Add a note to the smoke test README about manual pi verification.
+
+**Depends:** P0.2, P0.3 | **Time:** 30 min
 
 ---
 
@@ -159,12 +224,11 @@ Wire `open-brain-mcp` to Cursor/Claude Code for in-editor knowledge-graph access
 
 ## Immediate Next Actions
 
-1. **B.1** — Deploy `graph_edges` schema. ~30 min
-2. **B.2** — Wikilink Edge Extractor (no LLM). ~2 h
-3. **B.3** — Local Entity Extraction Worker. ~4 h
-4. **B.4** — Graph Traversal in Context Assembler. ~2 h
-
-**Time to Phase B complete:** ~8.5 hours.
+1. **P0.1** — Scaffold `packages/pi-open-brain/`. ~20 min
+2. **P0.2** — Implement extension tools (4 HTTP-backed pi tools). ~1.5 h
+3. **P0.3** — Write `SKILL.md` + `README.md`. ~30 min
+4. **P0.4** — Dev wiring + smoke verification. ~30 min
+5. **B.1** — Deploy `graph_edges` schema. ~30 min *(can run in parallel with P0)*
 
 ---
 
