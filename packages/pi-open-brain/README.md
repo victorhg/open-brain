@@ -11,6 +11,8 @@ Adds four tools directly into pi — no MCP protocol layer, no extra config file
 | `list_thoughts` | List recent captures, newest first |
 | `thought_stats` | Total thought count in the graph |
 
+For a full walkthrough with examples, see **[USAGE.md](./USAGE.md)**.
+
 ---
 
 ## Install
