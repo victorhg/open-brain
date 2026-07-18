@@ -17,27 +17,61 @@ For a full walkthrough with examples, see **[USAGE.md](./USAGE.md)**.
 
 ## Install
 
-```bash
-# From this repo (dev / local)
-pi install ./packages/pi-open-brain
+**Inside your Obsidian vault (recommended — project-local, not global):**
 
-# From git (any machine)
-pi install git:github.com/victorhugogermano/openbrain
+```bash
+cd ~/path/to/your-obsidian-vault
+pi install git:github.com/victorhugogermano/openbrain -l
 ```
 
-## Required env vars
+The `-l` flag installs into `.pi/` inside the vault directory. The package is only
+active when pi is opened from that vault — nothing changes globally.
 
-Add to your shell profile (`~/.zshrc`, `~/.bashrc`, etc.) or `.env`:
+```bash
+# Dev / local repo install
+pi install ./packages/pi-open-brain -l
+```
+
+## Credentials — keep them outside the vault
+
+> **The vault must never contain credentials.** If you use Obsidian Sync, iCloud,
+> Dropbox, or any other sync service, a credentials file inside the vault will be
+> uploaded. Keep secrets in your shell profile — it lives on the machine, not in the vault.
+
+**Add to your shell profile** (`~/.zshrc`, `~/.bash_profile`, etc.):
 
 ```sh
-# The full URL to your deployed Open Brain edge function
+# Open Brain — add to ~/.zshrc (never inside the vault)
 export BRAIN_MCP_URL="https://<ref>.supabase.co/functions/v1/open-brain-mcp"
-
-# Your MCP access key (same value as MCP_ACCESS_KEY on the Supabase server)
-export BRAIN_ACCESS_KEY="your-mcp-access-key"
+export BRAIN_ACCESS_KEY="your-mcp-access-key"  # same as MCP_ACCESS_KEY on the server
 ```
 
-Restart pi (or `/reload`) after setting env vars.
+Then reload your shell:
+
+```bash
+source ~/.zshrc   # or open a new terminal
+```
+
+Pi inherits these from the shell automatically. The vault holds zero credentials.
+
+## Exclude `.pi/` from Obsidian Sync
+
+After installing, your vault contains a `.pi/` folder with the cloned package files.
+These are per-machine (each device installs its own copy) and should not sync:
+
+> **Obsidian → Settings → Sync → Excluded folders → Add `.pi`**
+
+This keeps the package local on each machine. When you set up a new device, run
+`pi install git:... -l` again — it takes under a minute.
+
+**What `.pi/` contains (all safe, but no need to sync):**
+
+```
+.pi/
+├── settings.json          ← package list only, no credentials
+└── git/
+    └── github.com/...     ← cloned package code (public, per-machine)
+```
 
 ---
 

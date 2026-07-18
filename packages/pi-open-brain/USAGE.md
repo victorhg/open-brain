@@ -6,14 +6,55 @@ A hands-on walkthrough from first launch to daily use.
 
 ## Setup (one time)
 
+### 1. Install the package inside your vault
+
 ```bash
-# 1. Install the package in your vault
 cd ~/path/to/your-obsidian-vault
 pi install git:github.com/victorhugogermano/openbrain -l
+```
 
-# 2. Add to your shell profile (~/.zshrc or ~/.bashrc)
+The `-l` flag installs into `.pi/` inside the vault — project-local, not global.
+The package is only active when pi is opened from that vault directory.
+
+### 2. Add credentials to your shell profile
+
+> **Never put credentials inside the vault.** Obsidian Sync, iCloud, and Dropbox
+> will upload anything in the vault directory. Credentials belong in your shell
+> profile, which lives on the machine.
+
+Open `~/.zshrc` (or `~/.bash_profile` / `~/.bashrc`) and add:
+
+```bash
+# Open Brain — keep in shell profile, never in the vault
 export BRAIN_MCP_URL="https://<ref>.supabase.co/functions/v1/open-brain-mcp"
 export BRAIN_ACCESS_KEY="your-mcp-access-key"
+```
+
+Then reload:
+
+```bash
+source ~/.zshrc   # or open a new terminal
+```
+
+Pi picks these up from the shell automatically. Zero credentials in the vault.
+
+### 3. Exclude `.pi/` from Obsidian Sync
+
+The `.pi/` folder holds the cloned package files. They're per-machine (not shared
+across devices) and don't belong in sync.
+
+> **Obsidian → Settings → Sync → Excluded folders → Add `.pi`**
+
+On a new device: just run `pi install git:... -l` again. Takes under a minute.
+
+### New device checklist
+
+```
+[ ] cd into the vault
+[ ] pi install git:github.com/victorhugogermano/openbrain -l
+[ ] Add BRAIN_MCP_URL + BRAIN_ACCESS_KEY to ~/.zshrc
+[ ] source ~/.zshrc
+[ ] pi  (trust the project when prompted)
 ```
 
 ---
