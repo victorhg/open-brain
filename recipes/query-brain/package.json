@@ -1,0 +1,10 @@
+{
+  "name": "recipe-query-brain",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Grounded semantic query recipe for Open Brain",
+  "main": "index.js",
+  "dependencies": {
+    "open-brain-core": "*"
+  }
+}

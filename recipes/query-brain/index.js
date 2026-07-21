@@ -20,8 +20,7 @@
  *   --learnings       Inject accumulated insights and patterns
  */
 
-import { assembleContext, env, generateEmbedding } from '../../lib/context-assembler.js';
-import { checkLLMHealth } from '../../lib/llm-health.js';
+import { assembleContext, env, generateEmbedding, checkLLMHealth } from 'open-brain-core';
 
 const { LOCAL_LLM_BASE_URL, LOCAL_CHAT_MODEL } = env;
 

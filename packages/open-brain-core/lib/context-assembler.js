@@ -1,19 +1,8 @@
 /**
- * lib/context-assembler.js
+ * lib/context-assembler.js (inside open-brain-core)
  *
  * Central retrieval and context assembly module for Open Brain.
  * All tools that need to query the knowledge graph import from here.
- *
- * Pipeline (current → future):
- *   Stage 1 — Semantic search      (pgvector cosine, thoughts table)   ✅ implemented
- *   Stage 2 — Graph expansion       (graph_edges 1-hop traversal)       TODO: Phase B
- *   Stage 3 — Wiki lookup           (wiki_pages entity/synthesis pages) TODO: Phase C
- *   Stage 4 — Accumulated Learnings (learnings table)                   ✅ Phase D
- *
- * Exports:
- *   env              — merged .env + process.env object (for callers that need LLM config)
- *   generateEmbedding(text) → float[]
- *   assembleContext(opts)   → { chunks, graphNeighbors, wikiPages, assembledContext }
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -23,25 +12,36 @@ import { dirname, join } from 'path';
 
 // ---------------------------------------------------------------------------
 // Environment + Supabase
+// Helper to locate .env by walking up directories
 // ---------------------------------------------------------------------------
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname  = dirname(__filename);
 
-const envPath = join(__dirname, '../.env');
-if (!existsSync(envPath)) {
-  throw new Error(`[context-assembler] .env not found at ${envPath}`);
+function findEnvFile(startDir) {
+  let curr = startDir;
+  while (curr && curr !== dirname(curr)) {
+    const candidate = join(curr, '.env');
+    if (existsSync(candidate)) return candidate;
+    curr = dirname(curr);
+  }
+  return null;
 }
 
-const fileEnv = Object.fromEntries(
-  readFileSync(envPath, 'utf-8')
-    .split('\n')
-    .filter(line => line && !line.startsWith('#'))
-    .map(line => {
-      const [key, ...rest] = line.split('=');
-      return [key.trim(), rest.join('=').trim()];
-    })
-);
+const envPath = findEnvFile(__dirname) || join(process.cwd(), '.env');
+
+let fileEnv = {};
+if (existsSync(envPath)) {
+  fileEnv = Object.fromEntries(
+    readFileSync(envPath, 'utf-8')
+      .split('\n')
+      .filter(line => line && !line.startsWith('#'))
+      .map(line => {
+        const [key, ...rest] = line.split('=');
+        return [key.trim(), rest.join('=').trim()];
+      })
+  );
+}
 
 // process.env takes precedence (allows CI / shell overrides)
 export const env = { ...fileEnv, ...process.env };
@@ -55,7 +55,7 @@ const {
 } = env;
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('[context-assembler] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env');
+  throw new Error('[open-brain-core] SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set in .env');
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -73,7 +73,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
  */
 export async function generateEmbedding(text) {
   if (!LOCAL_LLM_BASE_URL || !LOCAL_EMBEDDING_MODEL) {
-    throw new Error('[context-assembler] LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL must be set in .env');
+    throw new Error('[open-brain-core] LOCAL_LLM_BASE_URL and LOCAL_EMBEDDING_MODEL must be set in .env');
   }
   const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/embeddings`;
   const headers = { 'Content-Type': 'application/json' };
@@ -84,7 +84,7 @@ export async function generateEmbedding(text) {
     headers,
     body: JSON.stringify({ model: LOCAL_EMBEDDING_MODEL, input: text }),
   });
-  if (!res.ok) throw new Error(`[context-assembler] Embedding HTTP ${res.status}: ${res.statusText}`);
+  if (!res.ok) throw new Error(`[open-brain-core] Embedding HTTP ${res.status}: ${res.statusText}`);
   const data = await res.json();
   return data.data[0].embedding;
 }
@@ -115,29 +115,10 @@ export function formatChunk(t) {
 // ---------------------------------------------------------------------------
 
 /**
- * @typedef {object} AssemblerOptions
- * @property {string}  query                   - The user's query text.
- * @property {number}  [topK=6]                - Max semantic hits to retrieve.
- * @property {number}  [minSimilarity=0.25]    - Cosine similarity floor.
- * @property {boolean} [includeGraph=false]    - Phase B: graph_edges 1-hop expansion.
- * @property {number}  [graphMinConfidence=0.5] - Phase B: min edge confidence to include.
- * @property {number}  [graphLimit=10]          - Phase B: max graph neighbors to return.
- * @property {boolean} [includeWiki=false]     - Phase C: wiki_pages lookup.
- * @property {boolean} [includeLearnings=false] - Phase D: learnings table lookup.
- *
- * @typedef {object} ContextResult
- * @property {object[]} chunks           - Ranked semantic hits (thought rows).
- * @property {object[]} graphNeighbors   - Phase B: 1-hop graph expansions.
- * @property {object[]} wikiPages        - Phase C: matching wiki_pages rows.
- * @property {object[]} learnings        - Phase D: matching insights.
- * @property {string}   assembledContext - Ready-to-inject prompt block.
- */
-
-/**
  * Assemble retrieval context for a query through all active pipeline stages.
  *
- * @param {AssemblerOptions} opts
- * @returns {Promise<ContextResult>}
+ * @param {object} opts
+ * @returns {Promise<object>}
  */
 export async function assembleContext({
   query,
@@ -149,11 +130,9 @@ export async function assembleContext({
   includeWiki        = false,
   includeLearnings   = false,
 } = {}) {
-  if (!query) throw new Error('[context-assembler] query is required');
+  if (!query) throw new Error('[open-brain-core] query is required');
 
-  // ------------------------------------------------------------------
-  // Stage 1: Semantic search (pgvector cosine)
-  // ------------------------------------------------------------------
+  // Stage 1: Semantic search
   const embedding = await generateEmbedding(query);
 
   const { data, error } = await supabase.rpc('match_thoughts', {
@@ -161,13 +140,11 @@ export async function assembleContext({
     match_threshold: minSimilarity,
     match_count:     topK,
   });
-  if (error) throw new Error(`[context-assembler] Semantic search failed: ${error.message}`);
+  if (error) throw new Error(`[open-brain-core] Semantic search failed: ${error.message}`);
 
   const chunks = data || [];
 
-  // ------------------------------------------------------------------
-  // Stage 2: Graph expansion — Phase B (graph_edges 1-hop traversal)
-  // ------------------------------------------------------------------
+  // Stage 2: Graph expansion
   let graphNeighbors = [];
   if (includeGraph && chunks.length > 0) {
     const seedIds = chunks.map((c) => c.id);
@@ -177,37 +154,32 @@ export async function assembleContext({
       p_limit: graphLimit,
     });
     if (graphError) {
-      console.warn(`[context-assembler] Graph expansion failed: ${graphError.message}`);
+      console.warn(`[open-brain-core] Graph expansion failed: ${graphError.message}`);
     } else {
       graphNeighbors = neighbors || [];
     }
   }
 
-  // ------------------------------------------------------------------
-  // Stage 3: Wiki lookup — Phase C (match_wiki_pages + FTS title)
-  // ------------------------------------------------------------------
+  // Stage 3: Wiki lookup
   let wikiPages = [];
   if (includeWiki) {
-    // Semantic pass: reuse the embedding already computed in Stage 1
     const { data: semanticWiki, error: wErr } = await supabase.rpc('match_wiki_pages', {
       query_embedding: embedding,
       match_threshold: 0.3,
       match_count: 2,
     });
     if (wErr) {
-      console.warn(`[context-assembler] Wiki semantic search failed: ${wErr.message}`);
+      console.warn(`[open-brain-core] Wiki semantic search failed: ${wErr.message}`);
     } else {
       wikiPages.push(...(semanticWiki ?? []));
     }
 
-    // FTS title pass: catches exact name mentions that embeddings miss
     const { data: ftsWiki } = await supabase
       .from('wiki_pages')
       .select('id, slug, title, content, page_type, source_thought_ids, model_used, updated_at')
       .textSearch('title', query, { type: 'websearch', config: 'simple' })
       .limit(2);
 
-    // Merge: add FTS hits not already in semantic results
     const seenIds = new Set(wikiPages.map(p => p.id));
     for (const p of ftsWiki ?? []) {
       if (!seenIds.has(p.id)) {
@@ -215,14 +187,10 @@ export async function assembleContext({
         seenIds.add(p.id);
       }
     }
-
-    // Cap at 3 total wiki pages
     wikiPages = wikiPages.slice(0, 3);
   }
 
-  // ------------------------------------------------------------------
-  // Stage 4: Accumulated Learnings — Phase D
-  // ------------------------------------------------------------------
+  // Stage 4: Accumulated Learnings
   let learnings = [];
   if (includeLearnings) {
     const { data: foundLearnings, error: lErr } = await supabase
@@ -233,15 +201,13 @@ export async function assembleContext({
       .limit(3);
 
     if (lErr) {
-      console.warn(`[context-assembler] Learnings lookup failed: ${lErr.message}`);
+      console.warn(`[open-brain-core] Learnings lookup failed: ${lErr.message}`);
     } else {
       learnings = foundLearnings ?? [];
     }
   }
 
-  // ------------------------------------------------------------------
   // Assemble final context string
-  // ------------------------------------------------------------------
   const sections = [];
 
   if (chunks.length > 0) {

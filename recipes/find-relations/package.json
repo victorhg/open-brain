@@ -1,0 +1,10 @@
+{
+  "name": "recipe-find-relations",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Multi-hop relational search recipe for Open Brain",
+  "main": "index.js",
+  "dependencies": {
+    "open-brain-core": "*"
+  }
+}

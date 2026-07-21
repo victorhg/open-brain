@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { runRelationFinder } from '../../recipes/find-relations/index.js';
+import { runRelationFinder } from '../../../recipes/find-relations/index.js';
 
 const cmd = new Command('find-relations');
 

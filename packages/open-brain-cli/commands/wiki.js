@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const buildWiki = join(__dirname, '../../bin/build-wiki.js');
+const buildWiki = join(__dirname, '../../../recipes/wiki-builder/index.js');
 
 const cmd = new Command('wiki');
 

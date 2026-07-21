@@ -1,0 +1,10 @@
+{
+  "name": "recipe-wiki-builder",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Synthesises wiki pages for top hub notes in Open Brain",
+  "main": "index.js",
+  "dependencies": {
+    "open-brain-core": "*"
+  }
+}

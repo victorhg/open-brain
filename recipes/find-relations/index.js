@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/recipes/env node
 
 /**
  * Open Brain Relational Reasoning / Multi-Hop Search CLI
@@ -8,28 +8,32 @@
  * relationship — solving the "disconnected dots" problem in plain RAG.
  *
  * Usage:
- *   node bin/find-relations.js "<concept A>" "<concept B>"
+ *   node recipes/find-relations.js "<concept A>" "<concept B>"
  *
  * Example:
- *   node bin/find-relations.js "masters" "blog"
+ *   node recipes/find-relations.js "masters" "blog"
  */
 
-import { assembleContext, env } from '../../lib/context-assembler.js';
+import { assembleContext, env } from 'open-brain-core';
+import { fileURLToPath } from 'url';
 
 const { LOCAL_LLM_BASE_URL, LOCAL_CHAT_MODEL } = env;
 
-const conceptA = process.argv[2];
-const conceptB = process.argv[3];
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  const conceptA = process.argv[2];
+  const conceptB = process.argv[3];
 
-if (!conceptA || !conceptB) {
-  console.log('🤖 Open Brain Relational Reasoning CLI');
-  console.log('═'.repeat(40));
-  console.log('Usage:');
-  console.log('  node bin/find-relations.js "<concept A>" "<concept B>"');
-  console.log('');
-  console.log('Example:');
-  console.log('  node bin/find-relations.js "masters" "blog"');
-  process.exit(0);
+  if (!conceptA || !conceptB) {
+    console.log('🤖 Open Brain Relational Reasoning CLI');
+    console.log('═'.repeat(40));
+    console.log('Usage:');
+    console.log('  node recipes/find-relations/index.js "<concept A>" "<concept B>"');
+    console.log('');
+    console.log('Example:');
+    console.log('  node recipes/find-relations/index.js "masters" "blog"');
+    process.exit(0);
+  }
+  runRelationFinder(conceptA, conceptB);
 }
 
 export async function runRelationFinder(conceptA, conceptB) {

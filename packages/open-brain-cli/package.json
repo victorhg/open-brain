@@ -1,0 +1,13 @@
+{
+  "name": "open-brain-cli",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "CLI interface for Open Brain knowledge graph",
+  "bin": {
+    "brain": "bin/brain.js"
+  },
+  "dependencies": {
+    "commander": "^15.0.0",
+    "open-brain-core": "*"
+  }
+}

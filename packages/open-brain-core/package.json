@@ -1,0 +1,11 @@
+{
+  "name": "open-brain-core",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Core retrieval, context assembly, and health check library for Open Brain",
+  "main": "index.js",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.47.10",
+    "dotenv": "^17.4.2"
+  }
+}

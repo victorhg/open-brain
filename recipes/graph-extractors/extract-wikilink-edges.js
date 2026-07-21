@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/recipes/env node
 /**
- * bin/extract-wikilink-edges.js
+ * recipes/extract-wikilink-edges.js
  *
  * B.2 — Deterministic wikilink edge extractor (no LLM).
  *
@@ -35,8 +35,8 @@
  * becomes a real problem.
  *
  * Usage:
- *   node bin/extract-wikilink-edges.js
- *   node bin/extract-wikilink-edges.js --dry-run   # resolve + report only, no writes
+ *   node recipes/extract-wikilink-edges.js
+ *   node recipes/extract-wikilink-edges.js --dry-run   # resolve + report only, no writes
  */
 
 import { createClient } from '@supabase/supabase-js';

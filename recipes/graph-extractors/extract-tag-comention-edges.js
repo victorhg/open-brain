@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/recipes/env node
 /**
- * bin/extract-tag-comention-edges.js
+ * recipes/extract-tag-comention-edges.js
  *
  * B.3 — Deterministic tag co-mention edge extractor (no LLM).
  *
@@ -21,7 +21,7 @@
  * run with --dry-run first to see the band's note/edge counts.
  *
  * ── Note-level dedup ─────────────────────────────────────────────────────
- * Same rationale as bin/extract-wikilink-edges.js: Obsidian notes are
+ * Same rationale as recipes/extract-wikilink-edges.js: Obsidian notes are
  * chunked into multiple `thoughts` rows sharing the same metadata.title and
  * (typically) the same metadata.tags. Edges are extracted between
  * *canonical* thought IDs (MIN(id) per title) — never between arbitrary
@@ -39,8 +39,8 @@
  * Idempotent: upserts on (source_thought_id, target_thought_id, edge_source).
  *
  * Usage:
- *   node bin/extract-tag-comention-edges.js
- *   node bin/extract-tag-comention-edges.js --dry-run
+ *   node recipes/extract-tag-comention-edges.js
+ *   node recipes/extract-tag-comention-edges.js --dry-run
  */
 
 import { createClient } from '@supabase/supabase-js';

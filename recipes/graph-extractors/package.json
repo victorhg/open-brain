@@ -1,0 +1,9 @@
+{
+  "name": "recipe-graph-extractors",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Deterministic graph edge extractors (wikilinks + tag co-mentions) for Open Brain",
+  "dependencies": {
+    "open-brain-core": "*"
+  }
+}

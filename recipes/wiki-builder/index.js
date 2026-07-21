@@ -1,6 +1,6 @@
-#!/usr/bin/env node
+#!/usr/recipes/env node
 /**
- * bin/build-wiki.js
+ * recipes/build-wiki.js
  *
  * C.2 — Wiki Synthesis Engine.
  *
@@ -16,11 +16,11 @@
  * (~3 000–6 000 tokens total input). Well within the local model context window.
  *
  * Usage:
- *   node bin/build-wiki.js                      # build top 20 hubs
- *   node bin/build-wiki.js --limit 50           # build top 50
- *   node bin/build-wiki.js --slug ai-snake-oil  # rebuild one page by slug
- *   node bin/build-wiki.js --min-degree 15      # only hubs with ≥15 edges
- *   node bin/build-wiki.js --dry-run            # select + prompt, no writes
+ *   node recipes/build-wiki.js                      # build top 20 hubs
+ *   node recipes/build-wiki.js --limit 50           # build top 50
+ *   node recipes/build-wiki.js --slug ai-snake-oil  # rebuild one page by slug
+ *   node recipes/build-wiki.js --min-degree 15      # only hubs with ≥15 edges
+ *   node recipes/build-wiki.js --dry-run            # select + prompt, no writes
  */
 
 import { createClient } from '@supabase/supabase-js';

@@ -1,8 +1,7 @@
 /**
- * lib/llm-health.js
+ * lib/llm-health.js (inside open-brain-core)
  *
  * Circuit breaker and health status monitor for local LLM inference.
- * Prevents synchronous hangs when the local LLM server is unreachable.
  */
 
 import { env } from './context-assembler.js';
@@ -11,8 +10,8 @@ let circuitBroken = false;
 let lastCheck = 0;
 let isHealthy = true;
 
-const CHECK_INTERVAL_MS = 60_000; // Cache status for 1 minute
-const FAILURE_THRESHOLD = 3;      // Fail after 3 attempts
+const CHECK_INTERVAL_MS = 60_000;
+const FAILURE_THRESHOLD = 3;
 let failureCount = 0;
 
 export async function checkLLMHealth() {
@@ -31,7 +30,7 @@ export async function checkLLMHealth() {
     const url = `${LOCAL_LLM_BASE_URL.replace(/\/+$/, '')}/health`;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 2000);
-    
+
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timer);
 

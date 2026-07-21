@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { runQuery } from '../../recipes/query-brain/index.js';
+import { runQuery } from '../../../recipes/query-brain/index.js';
 
 const cmd = new Command('query');
 

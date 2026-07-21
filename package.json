@@ -2,12 +2,17 @@
   "name": "open-brain-personal",
   "version": "1.0.0",
   "type": "module",
-  "description": "Open Brain personal context workspace",
+  "description": "Open Brain personal knowledge workspace",
+  "workspaces": [
+    "packages/*",
+    "recipes/*"
+  ],
   "bin": {
-    "brain": "cli/brain.js"
+    "brain": "packages/open-brain-cli/bin/brain.js"
   },
   "scripts": {
-    "query": "node bin/query-brain.js"
+    "query": "node recipes/query-brain/index.js",
+    "smoke": "node recipes/brain-smoke-test/smoke-all.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.47.10",
