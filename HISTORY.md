@@ -307,5 +307,17 @@ inside the Supabase edge function, which tried to reach `LOCAL_LLM_BASE_URL=http
 
 ---
 
+### Task P0.4: Live Vault Install ✅
+**Completed:** 2026-07-18
+
+Confirmed `pi-open-brain` was already installed as a local path package
+(`../../Development/openbrain/packages/pi-open-brain` in `pi list`).
+Verified via `pi-load.js`: 9/9 checks pass — all 4 tools and 3 skills load cleanly,
+zero errors or warnings.
+
+**P0 phase now fully complete.**
+
+---
+
 **Last Updated:** 2026-07-18
 

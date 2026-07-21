@@ -2,14 +2,13 @@
 
 > Completed work has moved to [`HISTORY.md`](./HISTORY.md). This file tracks **undone work only**.
 >
-> **Status:** P0 (`pi-open-brain` package) → **DONE** ✅ except P0.4 (live install) — all tools working end-to-end
+> **Status:** P0 (`pi-open-brain` package) → **COMPLETE** ✅ — all tools working end-to-end, package installed
 > **Constraint:** OpenBrain runs **fully local**. All inference goes through `LOCAL_LLM_BASE_URL`
 > (OpenAI-compatible). No cloud LLM providers. OpenRouter is disabled in `.env`.
 
 ## Immediate Next Actions
 
-1. **P0.4** — `pi install ./packages/pi-open-brain` in vault + manual end-to-end verification. ~30 min
-2. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked)*
+1. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked)*
 
 This roadmap merges two visions:
 - **[OB1 by Nate B. Jones](https://github.com/NateBJones-Projects/OB1)** — the foundation: Supabase + MCP + extensions.
@@ -138,16 +137,10 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# P0 · `pi-open-brain` — Distributable Pi Package *(one task remaining)*
+# P0 · `pi-open-brain` — Distributable Pi Package ✅ COMPLETE
 
-> P0.1–P0.3, P0.5, client-side embedding fix all complete. Only P0.4 remains.
-
-### Task P0.4: Live Vault Install
-Install the package into the Obsidian vault environment (`pi install ./packages/pi-open-brain`).
-Verify all 4 tools appear in the pi startup header. Run a manual `search_thoughts` and
-`thought_stats` to confirm end-to-end. Follow the checklist in `packages/pi-open-brain/USAGE.md`.
-
-**Depends:** P0.2, P0.3, embedding fix ✅ | **Time:** 30 min
+> All tasks done: P0.1–P0.5, client-side embedding fix, live install confirmed.
+> No remaining P0 work.
 
 ---
 
