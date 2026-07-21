@@ -167,3 +167,4 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 - **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`.
 - **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status`.
+- **`pi-open-brain` install smoke test (`--smoke-test` flag):** Add a self-contained verification command runnable from the installed package — e.g. `node packages/pi-open-brain/test/smoke.js --smoke-test` or a dedicated `bin/smoke-test.js` entry in `package.json`. Should confirm env vars are set, the edge function is reachable, auth works, and at least one tool call (`thought_stats`) returns a valid response — all without writing any data. Useful for post-install "is this wired correctly?" checks without needing the full dev repo smoke suite.
