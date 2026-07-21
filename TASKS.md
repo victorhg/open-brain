@@ -30,7 +30,7 @@ This roadmap merges two visions:
 
 ## What's missing (priority-ordered snapshot)
 
-- **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ✅ · pi-load.js test + smoke-all.js integration + live wiring still pending.
+- **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ~~test harness~~ ~~client-side embedding~~ ✅ · **P0.4 live install** is the only remaining item.
 - **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
@@ -138,38 +138,16 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ---
 
-# P0 · `pi-open-brain` — Distributable Pi Package *(nearly done)*
+# P0 · `pi-open-brain` — Distributable Pi Package *(one task remaining)*
 
-> P0.1, P0.2, P0.3 complete. Remaining: pi-load.js test, smoke-all.js integration, live install.
+> P0.1–P0.3, P0.5, client-side embedding fix all complete. Only P0.4 remains.
 
-### Task P0.5: Test Harness — remaining work
-**Layer 1 (smoke.js) ✅ done.** **Layer 3 (manual checklist in README) ✅ done.**
+### Task P0.4: Live Vault Install
+Install the package into the Obsidian vault environment (`pi install ./packages/pi-open-brain`).
+Verify all 4 tools appear in the pi startup header. Run a manual `search_thoughts` and
+`thought_stats` to confirm end-to-end. Follow the checklist in `packages/pi-open-brain/USAGE.md`.
 
-**Still needed:**
-
-**Layer 2 — Pi load verification (`packages/pi-open-brain/test/pi-load.js`):**
-Use the pi SDK (dynamically imported from global npm root) to load the extension without
-calling the LLM. Assert:
-- All 4 tools registered: `search_thoughts`, `capture_thought`, `list_thoughts`, `thought_stats`.
-- `open-brain` skill visible.
-- Zero extension load errors in `extensionsResult.errors`.
-
-Run: `node packages/pi-open-brain/test/pi-load.js`
-*(Requires pi installed globally — skipped if `@earendil-works/pi-coding-agent` not found.)*
-
-**smoke-all.js integration:**
-Add a `Pi Package: open-brain` category to `recipes/brain-smoke-test/smoke-all.js`.
-Delegate to `packages/pi-open-brain/test/smoke.js` checks inline (no subprocess).
-Skip category cleanly when `BRAIN_MCP_URL` is unset — same pattern as other optional categories.
-
-**Depends:** P0.2, P0.3 ✅ | **Time:** 45 min | **Files:** `packages/pi-open-brain/test/pi-load.js`, `recipes/brain-smoke-test/smoke-all.js`
-
-### Task P0.4: Dev Wiring + Smoke Test
-Install the package into this dev environment (`pi install ./packages/pi-open-brain`).
-Verify tools appear in pi startup header. Run a manual `search_thoughts` and `thought_stats`
-to confirm end-to-end. Add a note to the smoke test README about manual pi verification.
-
-**Depends:** P0.2, P0.3 | **Time:** 30 min
+**Depends:** P0.2, P0.3, embedding fix ✅ | **Time:** 30 min
 
 ---
 

@@ -262,56 +262,50 @@ manual verification checklist, update/uninstall.
 
 **Files:** `packages/pi-open-brain/skills/`, `packages/pi-open-brain/README.md`, `skills/README.md`
 
-### Task P0.5a: HTTP Smoke Test ✅
-**Completed:** 2026-07-18
+### Task P0.5: Full Test Harness ✅
+**Completed:** 2026-07-18 | Commits `0c22fbb`, `3e50c8b`
 
-Layer 1 of the P0.5 test harness: `packages/pi-open-brain/test/smoke.js`.
-Standalone Node.js script (no pi required). Walks up the directory tree to find `.env`.
-Auto-derives `BRAIN_MCP_URL` from `SUPABASE_URL` if not explicitly set;
-accepts `BRAIN_ACCESS_KEY` or falls back to `MCP_ACCESS_KEY`.
+Three-layer test harness for the `pi-open-brain` package:
 
-Checks (7 total):
-- Endpoint reachable (OPTIONS)
-- Missing key → 401
-- Wrong key → 401
-- Query-param key → 401 (security regression)
-- `thought_stats` returns numeric count
-- `search_thoughts` returns expected shape
-- `list_thoughts` returns expected shape
-- `capture_thought` + dedup (opt-in via `--write`)
+**Layer 1 — `packages/pi-open-brain/test/smoke.js`** (standalone HTTP, no pi required):
+Walks up to find `.env`; auto-derives `BRAIN_MCP_URL`; 7 checks covering auth rejection,
+query-param security regression, `thought_stats`, `search_thoughts`, `list_thoughts`.
 
-Run: `node packages/pi-open-brain/test/smoke.js`
+**Layer 2 — `packages/pi-open-brain/test/pi-load.js`** (pi SDK, no LLM):
+Dynamically imports pi SDK from global npm root; loads the extension in-process;
+asserts all 4 tools registered, all 3 skills (`open-brain`, `auto-capture`, `panning-for-gold`)
+loaded, zero errors or warnings. 9/9 passing.
 
-**Files:** `packages/pi-open-brain/test/smoke.js`
+**Layer 3 — `recipes/brain-smoke-test/smoke-all.js` integration**:
+Added `Pi Package: open-brain` category (5 checks): URL configured, header-only auth,
+`thought_stats`, `search_thoughts`, `list_thoughts`. Skips cleanly when `BRAIN_MCP_URL` unset.
 
-### Architecture boundary documentation ✅
-**Completed:** 2026-07-18 | Commit `1cd0b1c`
+**Files:** `packages/pi-open-brain/test/pi-load.js`, `packages/pi-open-brain/test/smoke.js`,
+`recipes/brain-smoke-test/smoke-all.js`
 
-Added "Architecture: This Repo vs. `pi-open-brain`" section to root `README.md`.
-Explains the two roles clearly:
-- **This repo** = dev/architecture/evolution environment (schemas, ingestion, CLI, smoke tests,
-  edge function). Never installed anywhere.
-- **`packages/pi-open-brain/`** = the distributable result. The only thing installed on any
-  other machine. Needs only `BRAIN_MCP_URL` + `BRAIN_ACCESS_KEY`.
+### Option B: Client-Side Embedding Fix ✅
+**Completed:** 2026-07-18 | Commit `bee3462`
 
-Includes an ASCII boundary diagram showing the call path from the installed package
-through the deployed Supabase edge function.
+**Problem:** `search_thoughts` and `capture_thought` both called `generateEmbedding()` server-side
+inside the Supabase edge function, which tried to reach `LOCAL_LLM_BASE_URL=http://127.0.0.1:8000/v1`
+— unreachable from Supabase cloud. Both tools were non-functional in production.
 
-**Files:** `README.md`
+**Fix:**
+- `packages/pi-open-brain/extensions/index.ts`: added `generateEmbeddingLocally()` — calls the
+  local LLM on the user's machine (where it is reachable). Respects `LOCAL_LLM_API` bearer token.
+  45s timeout on edge function calls via `AbortController`. Injects pre-computed vector into
+  `search_thoughts` and `capture_thought` args before sending to the edge function.
+- `supabase/functions/open-brain-mcp/index.ts`: both handlers accept optional `embedding` param;
+  use the client-provided vector directly (dimension-validated at `EMBEDDING_DIMENSIONS`);
+  fall back to `generateEmbedding()` only for local `supabase functions serve` dev.
+- `recipes/brain-smoke-test/smoke-all.js`: added `generateEmbeddingForSmoke()` helper (mirrors
+  extension logic, includes `LOCAL_LLM_API` bearer header); destructive checks now pre-embed
+  locally; `pi-open-brain: search_thoughts` upgraded from permanent `⚠ SkipError` to real
+  pass/fail; `capture_thought` check now detects `isError: true`.
+
+**Smoke suite after fix:** 29 pass, 8 skip, 0 fail (previously: 23/10/0 read-only, failed destructive).
 
 ---
 
 **Last Updated:** 2026-07-18
-
-### Option B: Client-Side Embedding Fix ✅
-**Completed:** 2026-07-17 | Commit `bee3462`
-
-**Problem:** `search_thoughts` and `capture_thought` both called `generateEmbedding()` server-side inside the Supabase edge function, which tried to reach `LOCAL_LLM_BASE_URL=http://127.0.0.1:8000/v1` — unreachable from Supabase cloud.
-
-**Fix:**
-- `packages/pi-open-brain/extensions/index.ts`: added `generateEmbeddingLocally()` — calls the local LLM on the user's machine (where it is reachable). Respects `LOCAL_LLM_API` bearer token. 45s timeout on edge function calls via `AbortController`. Injects pre-computed vector into `search_thoughts` and `capture_thought` args.
-- `supabase/functions/open-brain-mcp/index.ts`: both handlers accept optional `embedding` param; use the client-provided vector directly (dimension-validated); fall back to `generateEmbedding()` only for local `supabase functions serve` dev.
-- `recipes/brain-smoke-test/smoke-all.js`: added `generateEmbeddingForSmoke()` helper; destructive checks now pre-embed locally; `pi-open-brain: search_thoughts` upgraded from permanent SkipError to real pass/fail.
-
-**Smoke suite after fix:** 29 pass, 8 skip, 0 fail (was 23/10/0 read-only, failed destructive).
 
