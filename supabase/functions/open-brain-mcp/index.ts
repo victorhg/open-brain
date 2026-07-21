@@ -401,6 +401,16 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       );
     }
 
+    // ── thought_stats ──────────────────────────────────────────────────────
+    case "thought_stats": {
+      const { count, error } = await supabase
+        .from("thoughts")
+        .select("id", { count: "exact", head: true });
+
+      if (error) return `Error: ${error.message}`;
+      return `Total thoughts captured: ${count ?? "unknown"}`;
+    }
+
     // ── accumulate_learnings ────────────────────────────────────────────────
     case "accumulate_learnings": {
       const lookback_days = typeof args.lookback_days === "number" ? args.lookback_days : 7;
