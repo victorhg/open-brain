@@ -302,3 +302,16 @@ through the deployed Supabase edge function.
 ---
 
 **Last Updated:** 2026-07-18
+
+### Option B: Client-Side Embedding Fix ✅
+**Completed:** 2026-07-17 | Commit `bee3462`
+
+**Problem:** `search_thoughts` and `capture_thought` both called `generateEmbedding()` server-side inside the Supabase edge function, which tried to reach `LOCAL_LLM_BASE_URL=http://127.0.0.1:8000/v1` — unreachable from Supabase cloud.
+
+**Fix:**
+- `packages/pi-open-brain/extensions/index.ts`: added `generateEmbeddingLocally()` — calls the local LLM on the user's machine (where it is reachable). Respects `LOCAL_LLM_API` bearer token. 45s timeout on edge function calls via `AbortController`. Injects pre-computed vector into `search_thoughts` and `capture_thought` args.
+- `supabase/functions/open-brain-mcp/index.ts`: both handlers accept optional `embedding` param; use the client-provided vector directly (dimension-validated); fall back to `generateEmbedding()` only for local `supabase functions serve` dev.
+- `recipes/brain-smoke-test/smoke-all.js`: added `generateEmbeddingForSmoke()` helper; destructive checks now pre-embed locally; `pi-open-brain: search_thoughts` upgraded from permanent SkipError to real pass/fail.
+
+**Smoke suite after fix:** 29 pass, 8 skip, 0 fail (was 23/10/0 read-only, failed destructive).
+

@@ -2,9 +2,14 @@
 
 > Completed work has moved to [`HISTORY.md`](./HISTORY.md). This file tracks **undone work only**.
 >
-> **Status:** P0 (`pi-open-brain` package) → **NEARLY DONE** 🔧 — P0.1–P0.3 complete, P0.5 partial, P0.4 pending
+> **Status:** P0 (`pi-open-brain` package) → **DONE** ✅ except P0.4 (live install) — all tools working end-to-end
 > **Constraint:** OpenBrain runs **fully local**. All inference goes through `LOCAL_LLM_BASE_URL`
 > (OpenAI-compatible). No cloud LLM providers. OpenRouter is disabled in `.env`.
+
+## Immediate Next Actions
+
+1. **P0.4** — `pi install ./packages/pi-open-brain` in vault + manual end-to-end verification. ~30 min
+2. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked)*
 
 This roadmap merges two visions:
 - **[OB1 by Nate B. Jones](https://github.com/NateBJones-Projects/OB1)** — the foundation: Supabase + MCP + extensions.
@@ -184,12 +189,6 @@ to confirm end-to-end. Add a note to the smoke test README about manual pi verif
 - ✓ `list_learnings` MCP tool live.
 
 ---
-
-## Immediate Next Actions
-
-1. **P0.5** — Finish test harness: `pi-load.js` + smoke-all.js integration. ~45 min
-2. **P0.4** — Live install (`pi install ./packages/pi-open-brain`) + end-to-end verification. ~30 min
-3. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked, can start after P0 closes)*
 
 ---
 
