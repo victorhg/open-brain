@@ -58,8 +58,8 @@ const watcher = chokidar.watch(resolvedVaultPath, {
   persistent: true,
   ignoreInitial: true, // Only watch for NEW changes while running, don't re-ingest vault on start
   awaitWriteFinish: {
-    stabilityThreshold: 1500, // Wait for file to stop writing for 1.5 seconds before processing
-    pollInterval: 100
+    stabilityThreshold: 10000, // Wait for file to stop writing for 10 seconds before processing
+    pollInterval: 500
   }
 });
 

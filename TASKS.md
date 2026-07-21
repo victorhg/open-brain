@@ -147,3 +147,4 @@ Update `query-brain.js` to log every `--answer` session.
 - [x] **`pi-open-brain` install smoke test (`--smoke-test` flag):** Add a self-contained verification command. (Completed 2026-07-21)
 - **Dimensionality Reduction:** Research Matryoshka embeddings or vector projection to bring embeddings into the 1536/1024 dimension range for index support.
 - **Memory Pruning:** Implement automated staleness detection/archiving for long-term memory maintenance.
+- **Smart Sync / Diff-based Ingestion:** Enhance `obsidian-listener` to perform content-hashing/diffing before triggering the LLM pipeline, preventing redundant syncs during Obsidian autosave cycles.
