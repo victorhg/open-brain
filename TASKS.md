@@ -136,6 +136,11 @@ Update `query-brain.js` to log every `--answer` session.
 - **Inference Reliability:** Entire agent pipeline is synchronously dependent on a single `LOCAL_LLM_BASE_URL`. GPU contention or model unavailability causes system-wide failure.
 - **Memory Bloat (Pruning):** OpenBrain is currently additive only. Long-term, context windows will fill with stale/irrelevant chunks. Requires a "Memory Decay" or archival strategy to maintain synthesis quality.
 
+## Phase E · Inference Health
+- E.1: Implement Health Check Service (lib/llm-health.js) ✅
+- E.2: Integrate into Query Recipe (recipes/query-brain/index.js) ✅
+- E.3: Edge function health endpoint integration (Supabase) — TODO
+
 ## Future Improvements
 - **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`.
 - **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status`.

@@ -21,6 +21,7 @@
  */
 
 import { assembleContext, env, generateEmbedding } from '../../lib/context-assembler.js';
+import { checkLLMHealth } from '../../lib/llm-health.js';
 
 const { LOCAL_LLM_BASE_URL, LOCAL_CHAT_MODEL } = env;
 
@@ -159,6 +160,12 @@ export async function runQuery(queryText, options = {}) {
   }
 
   if (answer) {
+    const { isHealthy, circuitBroken } = await checkLLMHealth();
+    if (circuitBroken || !isHealthy) {
+      console.error('\n🚫 LLM inference is currently unavailable. Synthesis disabled.');
+      return;
+    }
+
     if (strict) {
       const maxSimilarity = Math.max(...chunks.map(m => m.similarity));
       if (maxSimilarity < 0.25) {
