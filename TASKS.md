@@ -32,7 +32,7 @@ This roadmap merges two visions:
 - **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ~~test harness~~ ~~client-side embedding~~ ~~live install~~ ✅ COMPLETE.
 - **P1 — Knowledge Graph:** ~~`graph_edges` table~~ ~~wikilink extraction~~ ~~tag co-mention~~ ~~graph traversal~~ ✅ COMPLETE (6,946 edges live).
 - **P1 — Wiki Synthesis:** ~~`wiki_pages` schema~~ ~~synthesis engine~~ ~~`brain wiki` CLI~~ ~~context assembler~~  ✅ COMPLETE (20 pages live).
-- **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
+- **P2 — Accumulated Learnings:** `learnings` + `query_sessions` deployed ✅. Next: accumulator job.
 - **Deferred — NateOB1-sourced tasks:** extensions, imports, dashboard, capture, advanced recipes. Repo available; start after P2.
 
 ---

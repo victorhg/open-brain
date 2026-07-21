@@ -493,4 +493,17 @@ embed + Supabase round-trip latency in destructive Core Features checks.
 
 ---
 
+## P2 · Phase D — Accumulated Learnings
+
+### Task D.1 — Deploy `learnings` + `query_sessions` schemas ✅
+**Completed:** 2026-07-21
+
+- Deployed `learnings` (insights, confidence, types) and `query_sessions` (tracking for accumulation) to Supabase.
+- Verified schema deployment via `supabase db push`.
+
+**Tables:** `learnings`, `query_sessions`.
+**Files:** `schemas/learnings/schema.sql`.
+
+---
+
 **Last Updated:** 2026-07-21
