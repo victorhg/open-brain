@@ -504,6 +504,35 @@ embed + Supabase round-trip latency in destructive Core Features checks.
 **Tables:** `learnings`, `query_sessions`.
 **Files:** `schemas/learnings/schema.sql`.
 
+### Task D.2: Learnings Accumulator ✅
+**Completed:** 2026-07-21
+
+- Implemented `accumulate_learnings` tool in `pi-open-brain` extension.
+- Implemented corresponding logic in `supabase/functions/open-brain-mcp/index.ts` to query `query_sessions` + `wiki_pages`, synthesize via local LLM, and insert results into `learnings`.
+- Deployed edge function to Supabase.
+
+**Files:** `packages/pi-open-brain/extensions/index.ts`, `supabase/functions/open-brain-mcp/index.ts`.
+
+### Task D.3: Expose Learnings (CLI + MCP) ✅
+**Completed:** 2026-07-21
+
+- Added `--learnings` flag to `brain query` CLI.
+- Updated `lib/context-assembler.js` to optionally inject `learnings` into retrieval pipeline.
+- Updated `recipes/query-brain/index.js` to display accumulated insights when `--learnings` is requested.
+
+**Files:** `lib/context-assembler.js`, `cli/commands/query.js`, `recipes/query-brain/index.js`.
+
+## Phase E · Inference Health ✅
+
+### Task E.1–E.3: Inference Health Hardening ✅
+**Completed:** 2026-07-21
+
+- Created `lib/llm-health.js` as a centralized circuit-breaker utility.
+- Integrated health-checks into CLI query synthesis (`recipes/query-brain/index.js`) and Edge Function (`supabase/functions/open-brain-mcp/index.ts`).
+- Systems now fail gracefully when local LLM is unreachable.
+
+**Files:** `lib/llm-health.js`, `recipes/query-brain/index.js`, `supabase/functions/open-brain-mcp/index.ts`.
+
 ---
 
 **Last Updated:** 2026-07-21
