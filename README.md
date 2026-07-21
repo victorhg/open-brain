@@ -44,7 +44,7 @@ This project is organized as a workspace monorepo to isolate core logic from dis
 
 - **`packages/open-brain-core`** — The engine. Contains `lib/context-assembler.js` (retrieval pipeline) and `lib/llm-health.js` (circuit breaker). All other components import from this package.
 - **`packages/open-brain-cli`** — The interface. Provides the `brain` binary.
-- **`packages/pi-obsidian-listener`** — The ingest watcher. Monitors Obsidian vaults for changes.
+- **`packages/obsidian-listener`** — The ingest watcher. Monitors Obsidian vaults for changes.
 - **`packages/pi-open-brain`** — The distribution. Self-contained pi extension that connects to the deployed Open Brain endpoint.
 - **`recipes/`** — Standalone tasks (e.g., wiki-builder, graph-extractors) that use `open-brain-core` as a dependency.
 

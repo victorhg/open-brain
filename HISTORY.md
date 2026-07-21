@@ -550,7 +550,7 @@ embed + Supabase round-trip latency in destructive Core Features checks.
 - Converted root to npm workspace.
 - Extracted shared logic to `packages/open-brain-core`.
 - Moved CLI to `packages/open-brain-cli`.
-- Moved Obsidian listener to `packages/pi-obsidian-listener`.
+- Moved Obsidian listener to `packages/obsidian-listener`.
 - Migrated legacy scripts from `bin/` into dedicated `recipes/` packages (`wiki-builder`, `graph-extractors`).
 - Fixed all cross-package imports and binary registrations.
 

@@ -9,7 +9,7 @@
  * 4. The Supabase upsert logic (via RPC) is reachable.
  */
 
-import { parseObsidianFile, chunkNote } from '../../packages/pi-obsidian-listener/process-file.js';
+import { parseObsidianFile, chunkNote } from '../../packages/obsidian-listener/process-file.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';

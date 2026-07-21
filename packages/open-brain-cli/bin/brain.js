@@ -2,7 +2,7 @@
 import { Command } from 'commander';
 import queryCmd from '../commands/query.js';
 import relationsCmd from '../commands/find-relations.js';
-import smokeCmd from '../commands/smoke-test.js';
+import watchCmd from '../commands/watch.js';
 
 const program = new Command();
 
@@ -14,6 +14,7 @@ program
 program.addCommand(queryCmd);
 program.addCommand(relationsCmd);
 program.addCommand(wikiCmd);
+program.addCommand(watchCmd);
 program.addCommand(smokeCmd);
 
 program.parse();

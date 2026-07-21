@@ -1,5 +1,5 @@
 {
-  "name": "open-brain-obsidian-listener",
+  "name": "obsidian-listener",
   "version": "1.0.0",
   "type": "module",
   "description": "Live directory watcher and sync engine for Obsidian to Open Brain",

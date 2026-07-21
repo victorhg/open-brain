@@ -61,7 +61,7 @@ The `brain` CLI is the control center for your OpenBrain instance. To install it
 ## 3. Obsidian Note Processing
 
 1. **Configure Listener:**
-   - The system uses `packages/pi-obsidian-listener` to watch your vault.
+   - The system uses `packages/obsidian-listener` to watch your vault.
    - Install dependencies: `npm install` in the root.
 2. **Ingest Existing Notes:**
    - Use the import recipe to backfill your vault:
