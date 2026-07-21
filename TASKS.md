@@ -139,7 +139,7 @@ Update `query-brain.js` to log every `--answer` session.
 ## Phase E · Inference Health
 - E.1: Implement Health Check Service (lib/llm-health.js) ✅
 - E.2: Integrate into Query Recipe (recipes/query-brain/index.js) ✅
-- E.3: Edge function health endpoint integration (Supabase) — TODO
+- E.3: Edge function health endpoint integration (Supabase) ✅
 
 ## Future Improvements
 - **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`.

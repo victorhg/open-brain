@@ -76,8 +76,29 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !MCP_ACCESS_KEY) {
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 // ---------------------------------------------------------------------------
-// Rate limiter — sliding window, in-memory per cold start
+// Health Check — Circuit Breaker (In-memory, resets on cold start)
 // ---------------------------------------------------------------------------
+const HEALTH_CACHE_TTL = 60_000;
+let lastHealthCheck = 0;
+let cachedHealthStatus = true;
+
+async function isLlmHealthy(): Promise<boolean> {
+  const now = Date.now();
+  if (now - lastHealthCheck < HEALTH_CACHE_TTL) return cachedHealthStatus;
+
+  try {
+    const base = LOCAL_LLM_BASE_URL.replace(/\/+$/, "");
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 2000);
+    const res = await fetch(`${base}/health`, { signal: controller.signal });
+    clearTimeout(timer);
+    cachedHealthStatus = res.ok;
+  } catch {
+    cachedHealthStatus = false;
+  }
+  lastHealthCheck = now;
+  return cachedHealthStatus;
+}
 
 const RATE_WINDOW_MS  = 60_000; // 1 minute
 const RATE_MAX_REQ    = 30;     // 30 requests per window per key
@@ -472,7 +493,12 @@ Return ONLY valid JSON (array of objects), no markdown or backticks:
 
       const content = validateCaptureInput(args.content); // throws on bad input
 
-      const meta = await extractMetadata(content);
+      let meta = { type: "note", category: "uncategorized", people: [], topics: [], action_items: [] };
+      if (await isLlmHealthy()) {
+        meta = await extractMetadata(content);
+      } else {
+        console.warn("[open-brain-mcp] LLM down; skipping metadata extraction.");
+      }
 
       // Use upsert_thought RPC — deduplicates via SHA-256 fingerprint, matching
       // the Node.js watcher path. Direct INSERT would bypass deduplication.
