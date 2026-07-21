@@ -439,3 +439,58 @@ canonical ID and returns 10 distinct, substantive neighbor notes.
 
 **Last Updated:** 2026-07-21
 
+
+## P1 · Phase C — Wiki Synthesis Layer ✅
+
+### Task C.1–C.4: Deploy wiki_pages + Build + CLI + Retrieval ✅
+**Completed:** 2026-07-21 | Commit `447dd09`
+
+Pre-computed synthesis layer: one wiki page per well-connected hub note,
+distilling it and its graph neighbors into a 250-350 word second-person
+synthesis, embedded and retrievable by semantic + FTS.
+
+**Design decisions vs. original plan:**
+- **No HNSW/IVFFlat vector index**: pgvector limits both index types to
+  2000 dims on this Supabase version; `wiki_pages` stays small (20-200 rows)
+  so an exact sequential scan is fast enough. Comment in schema documents the
+  threshold for adding an approximate index (>~10k rows).
+- **`page_type` free-text, not enum**: start with `hub_synthesis` only.
+  Expand when a second synthesis path is validated.
+- **One script, not two recipes**: `bin/build-wiki.js` replaces the planned
+  `recipes/wiki-synthesis/` + `recipes/entity-wiki/` split. No evidence yet
+  that the synthesis paths differ enough to warrant separate code.
+- **C.3 demoted**: post-ingest live hook → `brain wiki build` CLI command.
+  A live hook on every file save would trigger synthesis during vault syncs
+  (dozens of ingest events per minute). CLI command on demand or via cron is
+  the right shape for personal tooling.
+
+**Hub selection**: ranked by `degree × hub_content_length`. This filters out
+structural index notes (high degree but short own content, like course
+syllabi) in favor of notes with both connections AND prose.
+
+**Context cap**: 12 neighbors × 500 chars each (~3 000-6 000 char prompt =
+~750-1 500 tokens). Well within the local model (Gemma 4 26B) context window.
+
+**Synthesis quality**: verified on 3 pages before full run. Output is
+specific, grounded, references real note titles/authors, written in second
+person ("Your notes on X reveal..."). Avg synthesis length ~2 000 chars.
+
+**Timing**: first synthesis ~116s (model cold start); subsequent pages ~25s
+each. 20 pages built in ~10 minutes. `--skip-existing` flag added so re-runs
+after new ingests only rebuild new/missing pages.
+
+**Found during build**: `match_thoughts` (3 967 rows, no vector index on
+2560-dim column) takes ~15-20s — existing baseline, not a new issue. Added
+`timeout: 45_000` support to smoke-all.js check runner to accommodate LLM
+embed + Supabase round-trip latency in destructive Core Features checks.
+
+**Files:** `schemas/wiki-pages/`, `bin/build-wiki.js`, `cli/commands/wiki.js`,
+`cli/brain.js`, `lib/context-assembler.js` (Stage 3 implemented),
+`cli/commands/query.js`, `recipes/query-brain/index.js`,
+`recipes/brain-smoke-test/smoke-all.js`.
+
+**Smoke suite:** 30 pass, 7 skip, 0 fail (unchanged from Phase B).
+
+---
+
+**Last Updated:** 2026-07-21
