@@ -41,6 +41,23 @@ supabase db push --schema public
 ```
 This deploys the `thoughts`, `graph_edges`, `wiki_pages`, `learnings`, and `query_sessions` tables.
 
+## 2.1 Brain CLI Installation
+
+The `brain` CLI is the control center for your OpenBrain instance. To install it:
+
+1. Navigate to the CLI package directory:
+   ```bash
+   cd packages/open-brain-cli
+   ```
+2. Link the package globally so the `brain` command is available in your terminal:
+   ```bash
+   npm link
+   ```
+3. Verify installation:
+   ```bash
+   brain --version
+   ```
+
 ## 3. Obsidian Note Processing
 
 1. **Configure Listener:**
