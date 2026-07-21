@@ -533,6 +533,22 @@ embed + Supabase round-trip latency in destructive Core Features checks.
 
 **Files:** `lib/llm-health.js`, `recipes/query-brain/index.js`, `supabase/functions/open-brain-mcp/index.ts`.
 
+## Phase F · Monorepo Refactor ✅
+
+### Task F.1: Monorepo Workspace Migration ✅
+**Completed:** 2026-07-21
+
+- Converted root to npm workspace.
+- Extracted shared logic to `packages/open-brain-core`.
+- Moved CLI to `packages/open-brain-cli`.
+- Moved Obsidian listener to `packages/pi-obsidian-listener`.
+- Migrated legacy scripts from `bin/` into dedicated `recipes/` packages (`wiki-builder`, `graph-extractors`).
+- Fixed all cross-package imports and binary registrations.
+
+**Files:** `package.json`, `packages/`, `recipes/`.
+
+---
+
 ---
 
 **Last Updated:** 2026-07-21
