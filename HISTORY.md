@@ -556,6 +556,14 @@ embed + Supabase round-trip latency in destructive Core Features checks.
 
 **Files:** `package.json`, `packages/`, `recipes/`.
 
+### Task P0.7: Increase stability threshold for watcher ✅
+**Completed:** 2026-07-21
+
+- Increased `stabilityThreshold` to 10000ms in `packages/obsidian-listener/watcher.js` to mitigate autosave noise.
+- Logged future requirement for diff-based ingestion in `TASKS.md`.
+
+**Files:** `packages/obsidian-listener/watcher.js`, `TASKS.md`
+
 ---
 
 ---
