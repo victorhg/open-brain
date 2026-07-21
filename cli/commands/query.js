@@ -12,6 +12,7 @@ cmd
   .option('--strict', 'Abort if context is weak', false)
   .option('--graph', 'Expand results with 1-hop graph neighbors (wikilinks + tag co-mentions)', false)
   .option('--wiki', 'Prepend pre-computed wiki synthesis pages matching the query', false)
+  .option('--learnings', 'Inject accumulated insights and patterns', false)
   .action((query, options) => {
     runQuery(query, options);
   });

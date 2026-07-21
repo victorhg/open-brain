@@ -74,10 +74,14 @@ Update `query-brain.js` to log every `--answer` session.
 
 **Files:** `packages/pi-open-brain/extensions/index.ts`, `supabase/functions/open-brain-mcp/index.ts`.
 
-### Task D.3: Expose Learnings (CLI + MCP)
-`--learnings` flag in `query-brain.js`; optional injection in `lib/context-assembler.js` when a learning's
-entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki` in `open-brain-mcp`.
-**Depends:** C.4, D.2 | **Time:** 2–3 hours
+### Task D.3: Expose Learnings (CLI + MCP) ✅
+**Completed:** 2026-07-21
+
+- Added `--learnings` flag to `brain query` CLI.
+- Updated `lib/context-assembler.js` to optionally inject `learnings` into retrieval pipeline.
+- Updated `recipes/query-brain/index.js` to display accumulated insights when `--learnings` is requested.
+
+**Files:** `lib/context-assembler.js`, `cli/commands/query.js`, `recipes/query-brain/index.js`.
 
 ---
 

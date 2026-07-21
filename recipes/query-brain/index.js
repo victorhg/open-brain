@@ -17,6 +17,7 @@
  *   --strict          Abort answer generation if best match similarity < 0.25
  *   --graph           Expand results with 1-hop graph neighbors
  *   --wiki            Prepend pre-computed wiki synthesis pages matching the query
+ *   --learnings       Inject accumulated insights and patterns
  */
 
 import { assembleContext, env, generateEmbedding } from '../../lib/context-assembler.js';
@@ -76,18 +77,19 @@ async function synthesizeAnswer(question, assembledContext) {
 // --- Main Execution ---
 
 export async function runQuery(queryText, options = {}) {
-  const { limit = 5, threshold = 0.3, answer = false, strict = false, graph = false, wiki = false } = options;
+  const { limit = 5, threshold = 0.3, answer = false, strict = false, graph = false, wiki = false, learnings = false } = options;
 
   console.log(`\n🔍 Searching Open Brain for: "${queryText}"...`);
 
-  let chunks, graphNeighbors, wikiPages, assembledContext;
+  let chunks, graphNeighbors, wikiPages, learningsFound, assembledContext;
   try {
-    ({ chunks, graphNeighbors, wikiPages, assembledContext } = await assembleContext({
-      query:         queryText,
-      topK:          limit,
-      minSimilarity: threshold,
-      includeGraph:  graph,
-      includeWiki:   wiki,
+    ({ chunks, graphNeighbors, wikiPages, learnings: learningsFound, assembledContext } = await assembleContext({
+      query:            queryText,
+      topK:             limit,
+      minSimilarity:    threshold,
+      includeGraph:     graph,
+      includeWiki:      wiki,
+      includeLearnings: learnings,
     }));
   } catch (err) {
     console.error(`❌ Context assembly failed: ${err.message}`);
@@ -144,6 +146,16 @@ export async function runQuery(queryText, options = {}) {
     console.log('\n' + '═'.repeat(60) + '\n');
   } else if (graph) {
     console.log('🕸️  Graph Expansion: no connected notes found above the confidence threshold.\n');
+  }
+
+  if (learnings && learningsFound && learningsFound.length > 0) {
+    console.log(`💡  Accumulated Learnings — ${learningsFound.length} insight(s):\n`);
+    learningsFound.forEach((l, idx) => {
+      console.log(`  ${idx + 1}. [${l.learning_type.toUpperCase()} | conf: ${l.confidence}] ${l.insight}`);
+    });
+    console.log('\n' + '═'.repeat(60) + '\n');
+  } else if (learnings) {
+    console.log('💡  Accumulated Learnings: no relevant insights found.\n');
   }
 
   if (answer) {
