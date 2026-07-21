@@ -11,8 +11,9 @@ Standard OB1 setup requires manual orchestration of scripts and database migrati
 Instead of running manual commands, interact with `pi` to manage your brain.
 
 ### Common Commands
-- **"Set up the Household Knowledge Base."** — `pi` will verify the extension directory, apply the necessary schema updates, and configure the edge function.
-- **"Import my ChatGPT data."** — `pi` will guide you through the `recipes/chatgpt-conversation-import/` workflow and execute the ingestion.
+- **"Search my notes for [topic]"** — Uses semantic search and optionally expands results via the knowledge graph.
+- **"Answer [question] using my notes"** — Synthesizes a grounded answer from the knowledge graph, wiki synthesis pages, and accumulated learnings.
+- **"Accumulate recent learnings"** — Synthesizes cross-domain insights from your recent interaction history.
 - **"Audit my current extensions."** — `pi` will scan your configuration and report on status and health.
 
 ## Project Structure
@@ -95,7 +96,10 @@ Any architecture change — new table, new embedding model, new Edge Function lo
 
 ## 📋 Roadmap & History
 
-- [`TASKS.md`](./TASKS.md) — **active roadmap**. All undone work, prioritized by tier (P0 → P2). Includes the query engine, knowledge graph, wiki synthesis, and accumulated learnings phases. Tasks blocked on external dependencies are clearly marked.
+- **Phase D — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure. ✅
+- **Phase E — Inference Health:** Circuit breaker and health-check service for local LLM availability. ✅
+
+- [`TASKS.md`](./TASKS.md) — **active roadmap**. All undone work, prioritized by tier (P0 → P2). Includes the query engine, knowledge graph, wiki synthesis, accumulated learnings, and inference health phases. Tasks blocked on external dependencies are clearly marked.
 - [`HISTORY.md`](./HISTORY.md) — **immutable completion log**. Every finished phase and task with dates and validation results. Source of truth for what has already been built.
 
 > Rule: when a task in `TASKS.md` is completed, move it to `HISTORY.md` — never delete it.
