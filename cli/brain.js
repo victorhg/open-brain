@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import queryCmd from './commands/query.js';
 import relationsCmd from './commands/find-relations.js';
+import wikiCmd from './commands/wiki.js';
 
 const program = new Command();
 
@@ -12,5 +13,6 @@ program
 
 program.addCommand(queryCmd);
 program.addCommand(relationsCmd);
+program.addCommand(wikiCmd);
 
 program.parse();

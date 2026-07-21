@@ -1,0 +1,12 @@
+{
+  "name": "Wiki Pages — Pre-computed Synthesis Layer",
+  "description": "Adds a wiki_pages table storing LLM-synthesized summaries of well-connected hub notes. Each page distils a topic hub and its graph neighbors into a 250-350 word synthesis, embedded for semantic retrieval via match_wiki_pages RPC.",
+  "category": "schemas",
+  "version": "1.0.0",
+  "requires": { "open_brain": true },
+  "tags": ["schema", "wiki", "synthesis", "retrieval", "knowledge-graph"],
+  "difficulty": "intermediate",
+  "estimated_time": "15 minutes",
+  "created": "2026-07-21",
+  "updated": "2026-07-21"
+}

@@ -691,6 +691,7 @@ const coreChecks = [
   },
   {
     name: "MCP capture_thought tool call",
+    timeout: 45_000, // embedding on local LLM can take 15-30s
     fn: async (s) => {
       // Generate embedding locally so the edge function doesn't need to reach
       // LOCAL_LLM_BASE_URL from Supabase cloud (which is unreachable there).
@@ -718,6 +719,7 @@ const coreChecks = [
   },
   {
     name: "MCP search_thoughts finds test row",
+    timeout: 45_000, // embedding on local LLM can take 15-30s
     fn: async (s) => {
       // Best-effort: some clients debounce embedding; retry once.
       for (const attempt of [1, 2]) {
@@ -1064,7 +1066,7 @@ async function main() {
       let cleanupMs = 0;
       try {
         for (const check of category.checks) {
-          const outcome = await runCheck(check.fn);
+          const outcome = await runCheck(check.fn, { timeout: check.timeout ?? 10_000 });
           results.push({ category: category.name, name: check.name, ...outcome });
         }
         // First cleanup attempt (inside the try so a thrown DELETE does not
@@ -1158,7 +1160,7 @@ async function main() {
     // Run checks within a category sequentially so shared state
     // (createdSmokeId) stays consistent.
     for (const check of category.checks) {
-      const outcome = await runCheck(check.fn);
+      const outcome = await runCheck(check.fn, { timeout: check.timeout ?? 10_000 });
       results.push({ category: category.name, name: check.name, ...outcome });
     }
   }

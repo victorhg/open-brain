@@ -14,8 +14,9 @@
  *   --limit N         Max search results (default: 5)
  *   --threshold T     Similarity threshold 0-1 (default: 0.3)
  *   --answer          Synthesize a grounded answer using the local Chat LLM
- *   --strict          Abort answer generation if best match similarity < 0.25 (no hallucination on weak context)
- *   --graph           Expand results with 1-hop graph neighbors (Phase B: wikilinks + tag co-mentions)
+ *   --strict          Abort answer generation if best match similarity < 0.25
+ *   --graph           Expand results with 1-hop graph neighbors
+ *   --wiki            Prepend pre-computed wiki synthesis pages matching the query
  */
 
 import { assembleContext, env, generateEmbedding } from '../../lib/context-assembler.js';
@@ -75,17 +76,18 @@ async function synthesizeAnswer(question, assembledContext) {
 // --- Main Execution ---
 
 export async function runQuery(queryText, options = {}) {
-  const { limit = 5, threshold = 0.3, answer = false, strict = false, graph = false } = options;
+  const { limit = 5, threshold = 0.3, answer = false, strict = false, graph = false, wiki = false } = options;
 
   console.log(`\n🔍 Searching Open Brain for: "${queryText}"...`);
 
-  let chunks, graphNeighbors, assembledContext;
+  let chunks, graphNeighbors, wikiPages, assembledContext;
   try {
-    ({ chunks, graphNeighbors, assembledContext } = await assembleContext({
+    ({ chunks, graphNeighbors, wikiPages, assembledContext } = await assembleContext({
       query:         queryText,
       topK:          limit,
       minSimilarity: threshold,
       includeGraph:  graph,
+      includeWiki:   wiki,
     }));
   } catch (err) {
     console.error(`❌ Context assembly failed: ${err.message}`);
@@ -116,6 +118,21 @@ export async function runQuery(queryText, options = {}) {
     }
     console.log('\n' + '═'.repeat(60) + '\n');
   });
+
+  if (wiki && wikiPages && wikiPages.length > 0) {
+    console.log(`📖  Wiki Pages — ${wikiPages.length} pre-computed synthesis page(s):\n`);
+    wikiPages.forEach((p, idx) => {
+      const sim = p.similarity != null ? ` (similarity: ${(p.similarity*100).toFixed(0)}%)` : '';
+      console.log(`  ${idx + 1}. ${p.title}${sim}`);
+      console.log('  ' + '─'.repeat(48));
+      console.log('  ' + p.content.slice(0, 500).replace(/\n/g, '\n  '));
+      console.log('  ...');
+      console.log();
+    });
+    console.log('═'.repeat(60) + '\n');
+  } else if (wiki) {
+    console.log('📖  Wiki Pages: no matching synthesis pages found.\n');
+  }
 
   if (graph && graphNeighbors && graphNeighbors.length > 0) {
     console.log(`🕸️  Graph Expansion — ${graphNeighbors.length} related note(s):\n`);
