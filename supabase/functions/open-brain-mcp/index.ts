@@ -288,6 +288,16 @@ const TOOLS = [
     inputSchema: { type: "object", properties: {} },
   },
   {
+    name: "accumulate_learnings",
+    description: "Review recent queries to generate insights and patterns.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        lookback_days: { type: "number", description: "Days to look back. Default 7." }
+      }
+    },
+  },
+  {
     name: "capture_thought",
     description: "Save a new thought to Open Brain. Generates a local embedding and deduplicates via fingerprint.",
     inputSchema: {
@@ -370,14 +380,85 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       );
     }
 
-    // ── thought_stats ──────────────────────────────────────────────────────
-    case "thought_stats": {
-      const { count, error } = await supabase
-        .from("thoughts")
-        .select("id", { count: "exact", head: true });
+    // ── accumulate_learnings ────────────────────────────────────────────────
+    case "accumulate_learnings": {
+      const lookback_days = typeof args.lookback_days === "number" ? args.lookback_days : 7;
+      const since_date = new Date(Date.now() - lookback_days * 24 * 60 * 60 * 1000).toISOString();
 
-      if (error) return `Error: ${error.message}`;
-      return `Total thoughts captured: ${count ?? "unknown"}`;
+      // Fetch recent sessions
+      const { data: sessions, error: sessErr } = await supabase
+        .from("query_sessions")
+        .select("query, answer")
+        .gte("created_at", since_date);
+
+      if (sessErr) return `Error fetching sessions: ${sessErr.message}`;
+      if (!sessions?.length) return "No query sessions found in this window.";
+
+      // Fetch recent wiki pages as context
+      const { data: wikis, error: wikiErr } = await supabase
+        .from("wiki_pages")
+        .select("slug, content")
+        .gte("created_at", since_date);
+
+      if (wikiErr) return `Error fetching wikis: ${wikiErr.message}`;
+
+      // Construct context for the LLM
+      const context = `
+Recent Query Sessions:
+${sessions.map(s => `Q: ${s.query}\nA: ${s.answer}`).join("\n---\n")}
+
+Recent Wiki Pages:
+${wikis?.map(w => `Slug: ${w.slug}\nContent: ${w.content}`).join("\n---\n") || "None"}
+
+Task: Review the above data. Identify 1-3 cross-domain insights, patterns, contradictions, connections, gaps, or trends.
+Return ONLY valid JSON (array of objects), no markdown or backticks:
+[{
+  "insight": "string",
+  "learning_type": "pattern" | "contradiction" | "connection" | "gap" | "trend",
+  "confidence": number (0 to 1),
+  "related_wiki_slugs": ["slug1", "slug2"]
+}]
+`.trim();
+
+      // Call LLM for accumulation
+      assertLlmConfig("chat");
+      const base = LOCAL_LLM_BASE_URL.replace(/\/+$/, "");
+      const res = await fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: llmHeaders(),
+        body: JSON.stringify({
+          model: LOCAL_CHAT_MODEL,
+          messages: [{ role: "user", content: context }],
+          temperature: 0.7,
+        }),
+      });
+
+      if (!res.ok) return `LLM synthesis failed: HTTP ${res.status}`;
+      const data = await res.json();
+      const raw = data.choices[0].message.content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+      let learnings: Array<{
+        insight: string;
+        learning_type: string;
+        confidence: number;
+        related_wiki_slugs: string[];
+      }>;
+      try {
+        learnings = JSON.parse(raw);
+      } catch (err) {
+        return `Failed to parse LLM response: ${err}\nRaw output: ${raw}`;
+      }
+
+      // Store in learnings table
+      const { error: insErr } = await supabase.from("learnings").insert(
+        learnings.map(l => ({
+          ...l,
+          session_window: `[${since_date}, ${new Date().toISOString()}]`,
+        }))
+      );
+      if (insErr) return `Error saving insights: ${insErr.message}`;
+
+      return `Successfully accumulated ${learnings.length} new insight(s).`;
     }
 
     // ── capture_thought ────────────────────────────────────────────────────

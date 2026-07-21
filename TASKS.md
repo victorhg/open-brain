@@ -65,11 +65,14 @@ and `query_sessions` (query, answer, thought_ids, wiki_slugs, model_used, filed_
 Update `query-brain.js` to log every `--answer` session.
 **Depends:** Phase A | **Time:** 45 min
 
-### Task D.2: Learnings Accumulator
-`packages/pi-open-brain/extensions/learnings.ts` (or integrated into existing extension):
-Review last N sessions + referenced wiki pages, prompt the local LLM for patterns/contradictions/connections/gaps/trends (JSON, confidence ≥ 0.6), insert into `learnings`.
-Exposed as tool `accumulate_learnings`.
-**Depends:** D.1 | **Time:** 3 hours
+### Task D.2: Learnings Accumulator ✅
+**Completed:** 2026-07-21
+
+- Implemented `accumulate_learnings` tool in `pi-open-brain` extension.
+- Implemented corresponding logic in `supabase/functions/open-brain-mcp/index.ts` to query `query_sessions` + `wiki_pages`, synthesize via local LLM, and insert results into `learnings`.
+- Deployed edge function to Supabase.
+
+**Files:** `packages/pi-open-brain/extensions/index.ts`, `supabase/functions/open-brain-mcp/index.ts`.
 
 ### Task D.3: Expose Learnings (CLI + MCP)
 `--learnings` flag in `query-brain.js`; optional injection in `lib/context-assembler.js` when a learning's

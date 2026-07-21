@@ -270,4 +270,19 @@ export default function (pi: ExtensionAPI) {
       return { content: [{ type: "text", text }], details: {} };
     },
   });
+
+  // ── accumulate_learnings ──────────────────────────────────────────────────
+  pi.registerTool({
+    name: "accumulate_learnings",
+    label: "Accumulate Learnings",
+    description: "Review recent queries and interactions to generate insights, patterns, or contradictions.",
+    promptSnippet: "Accumulate and generate new insights from recent queries",
+    parameters: Type.Object({
+      lookback_days: Type.Optional(Type.Number({ description: "Number of days to look back. Default 7." })),
+    }),
+    async execute(_id, params) {
+      const text = await mcpCall("accumulate_learnings", params as Record<string, unknown>);
+      return { content: [{ type: "text", text }], details: {} };
+    },
+  });
 }
