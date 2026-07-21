@@ -319,5 +319,123 @@ zero errors or warnings.
 
 ---
 
-**Last Updated:** 2026-07-18
+## P1 · Phase B — Knowledge Graph Layer ✅
+
+### Task B.1–B.4: Deploy `graph_edges` + Deterministic Traversal ✅
+**Completed:** 2026-07-21 | Commit `6121f6b`
+
+Built a thought-centric knowledge graph enabling 1-hop retrieval expansion
+beyond pure semantic similarity — zero LLM calls, fully deterministic.
+
+**Schema design decision:** the original plan (see old TASKS.md draft)
+spec'd an entity-centric schema (`source_entity`, `relation_type`,
+`target_entity`). Rejected in favor of thought-to-thought edges
+(`source_thought_id → target_thought_id`) because the actual retrieval
+use case is "I found thought A semantically — what other thoughts are
+strongly connected to it?" — entity names live in `metadata` jsonb on the
+edge, not as separate graph nodes. Keeps traversal to a single indexed
+lookup instead of an entity-resolution join.
+
+**Simplification decision (before implementation):** the original plan
+included a Task B.3 for LLM-based entity/relation extraction
+(`integrations/entity-extraction-worker/`, ~4,000 API calls, hours of
+processing). Dropped in favor of a **tag co-mention extractor** —
+deterministic, free, and sufficient: wikilinks alone cover 89% of the
+vault (3,536/3,965 thoughts), tags cover the remaining gap. Reserved LLM
+entity extraction as a possible future Phase D+ enhancement, not blocking
+Phase B.
+
+**Critical discovery during implementation (chunking):** Obsidian notes
+are chunked by heading into multiple `thoughts` rows — 72% of the vault
+(2,871/3,965 thoughts) belongs to a multi-chunk note, and every chunk of
+a note shares the identical `metadata.title` and `metadata.wikilinks`
+list (verified: a 6-chunk note had the same 57-link wikilinks array on
+every chunk). Naive chunk-to-chunk edge extraction produces a bipartite
+explosion: 16,643 raw wikilink references across chunks naively expand to
+36,296+ edges ("218% resolution rate" — the tell that something was
+wrong). Fixed by:
+1. Extracting edges between **canonical thought IDs** — one representative
+   chunk per note, deterministically chosen as `MIN(id)` (string
+   comparison) among that note's chunks.
+2. Making `expand_graph_neighbors` **chunk-aware**: given seed thought IDs
+   from semantic search (which can be any chunk of a note, not
+   necessarily canonical), the RPC first maps each seed to its note's
+   canonical ID via a join on `metadata->>'title'`, queries edges using
+   that canonical ID, then maps the neighbor's canonical ID back to the
+   *most substantive chunk* (longest content) of that note before
+   returning it — so callers get real content, not an arbitrary
+   frontmatter fragment.
+3. Excluding neighbors that are just a different chunk of a **seed's own
+   note** (title match, not just literal ID match) — caught during manual
+   verification when a graph expansion returned the same note as one of
+   the semantic hits under a different chunk ID.
+
+**Postgres gotcha:** `MIN(uuid)` is not a valid aggregate in Postgres
+(`function min(uuid) does not exist`) — fixed by casting to text
+(`MIN(t.id::text)::uuid`), matching the JS extractor's string comparison
+for a consistent canonical choice between the two languages.
+
+**B.1 — Schema:** `schemas/graph-edges/schema.sql` + `metadata.json` +
+`README.md`. Table: `graph_edges` (source/target thought UUIDs,
+`edge_source` check-constrained to `'wikilink' | 'tag_comention'`,
+`confidence numeric(4,3)`, `metadata jsonb`, unique on
+`(source,target,edge_source)`, no self-loops). RLS enabled,
+service-role-only policy (matches `thoughts` table posture).
+`expand_graph_neighbors(p_thought_ids, p_min_confidence, p_limit)` RPC,
+granted to `authenticated`/`service_role` only. Expression index
+`idx_thoughts_title_expr` on `metadata->>'title'` supports the RPC's
+double title join. Deployed via `supabase link` + `supabase db push`
+(required decoding the URL-encoded `SUPABASE_DB_PASSWORD` from `.env` and
+setting it as an env var — `supabase db push --dry-run` confirmed
+connectivity before the real push).
+
+**B.2 — Wikilink extractor:** `bin/extract-wikilink-edges.js`. Groups
+thoughts by normalized title, takes the longest observed wikilinks list
+per note (chunks carry duplicates), resolves each link to a target note's
+canonical ID (case-insensitive title match), dedupes by
+`sourceCanonical->targetCanonical` pair before writing. Idempotent
+upsert. **Result: 2,958 edges from 4,923 note-level link references
+(60.1% resolution).** Top unresolved targets are non-existent notes
+("Daily Notes" referenced 403x, "Livros" 88x) — expected, not a bug.
+
+**B.3 — Tag co-mention extractor:** `bin/extract-tag-comention-edges.js`.
+Connects notes sharing a specific tag, filtered to a frequency band
+(tunable `MIN_TAG_FREQ`/`MAX_TAG_FREQ` constants) to avoid both
+one-off-tag noise and generic-tag explosion. Initial band [5,50] produced
+14,091 edges — investigated and found the top few tags near 50 occurrences
+(`#chines` 49 notes, `#kindle`/`#highlights` 47 notes each) contributed
+the bulk via quadratic pair growth (`#chines` alone: 1,176 pairs). Tightened
+to [5,20], bringing the count to the same order of magnitude as the
+wikilink graph. Confidence scaled linearly by tag rarity within the band
+(0.9 at freq=5 down to 0.5 at freq=20) — always below wikilink confidence
+(1.0), since co-tagging is a weaker signal than an explicit link. **Result:
+3,988 edges from 90 in-band tags (of 586 unique tags total).**
+
+**B.4 — Context assembler + `--graph` flag:** Implemented Stage 2 in
+`lib/context-assembler.js` (previously a TODO stub) — `includeGraph: true`
+calls `expand_graph_neighbors` with the top semantic hit IDs as seeds; new
+`graphMinConfidence` (default 0.5) and `graphLimit` (default 10) options.
+Neighbors are appended to `assembledContext` under a `[Graph Expansion]`
+header with `via: {edge_source}, confidence: {confidence}` annotations.
+Exposed as `--graph` in `cli/commands/query.js` →
+`recipes/query-brain/index.js`, printing a labeled section listing each
+neighbor with a 🔗/🏷️ icon per edge type.
+
+**Total graph: 6,946 edges** (2,958 wikilink + 3,988 tag_comention).
+Verified end-to-end: `brain query "ethics in artificial intelligence"
+--graph` correctly expands a non-canonical chunk seed through its note's
+canonical ID and returns 10 distinct, substantive neighbor notes.
+
+**Files:** `schemas/graph-edges/`, `bin/extract-wikilink-edges.js`,
+`bin/extract-tag-comention-edges.js`, `lib/context-assembler.js`,
+`cli/commands/query.js`, `recipes/query-brain/index.js`,
+`supabase/migrations/20260721105036_graph_edges.sql`,
+`supabase/migrations/20260721110548_graph_edges_exclude_same_note.sql`.
+
+**Verification:** Full smoke suite after deployment: 30 pass, 7 skip,
+0 fail (was 29/8/0 — `graph_edges` table now detected with 6,946 rows).
+
+---
+
+**Last Updated:** 2026-07-21
 

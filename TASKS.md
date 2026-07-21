@@ -8,7 +8,7 @@
 
 ## Immediate Next Actions
 
-1. **B.1** — Deploy `graph_edges` schema. ~30 min *(unblocked)*
+1. **C.1** — Deploy `wiki_pages` schema. ~30 min *(unblocked)*
 
 This roadmap merges two visions:
 - **[OB1 by Nate B. Jones](https://github.com/NateBJones-Projects/OB1)** — the foundation: Supabase + MCP + extensions.
@@ -29,43 +29,20 @@ This roadmap merges two visions:
 
 ## What's missing (priority-ordered snapshot)
 
-- **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ~~test harness~~ ~~client-side embedding~~ ✅ · **P0.4 live install** is the only remaining item.
-- **P1 — Knowledge Graph:** `graph_edges` table, wikilink + prose extraction, graph traversal.
+- **P0 — `pi-open-brain` package:** ~~Scaffold~~ ~~tools~~ ~~skills~~ ~~test harness~~ ~~client-side embedding~~ ~~live install~~ ✅ COMPLETE.
+- **P1 — Knowledge Graph:** ~~`graph_edges` table~~ ~~wikilink extraction~~ ~~tag co-mention~~ ~~graph traversal~~ ✅ COMPLETE (6,946 edges live).
 - **P1 — Wiki Synthesis:** `wiki_pages` table, entity/synthesis pages, post-ingest refresh.
 - **P2 — Accumulated Learnings:** `learnings` + `query_sessions`, accumulator job, MCP exposure.
 - **Deferred — NateOB1-sourced tasks:** extensions, imports, dashboard, capture, advanced recipes. Repo available; start after P2.
 
 ---
 
-# P1 · Phase B — Knowledge Graph Layer
+# P1 · Phase B — Knowledge Graph Layer ✅ COMPLETE
 
-> **Vision (ArchDoc):** hybrid graph — deterministic wikilink edges (confidence 1.0) +
-> local-LLM-extracted entity/relation edges (confidence < 1.0) in `graph_edges`. Multi-hop
-> traversal expands retrieval beyond semantic overlap.
-
-### Task B.1: Deploy `graph_edges` Schema
-Create `schemas/graph-edges/schema.sql` + `metadata.json`; deploy via Supabase; verify table.
-Columns: `source_entity/type`, `relation_type`, `target_entity/type`, `confidence`,
-`edge_source` (`'wikilink' | 'prose_extraction'`), `source_thought_id`, indexes on entities/confidence.
-**Depends:** none | **Time:** 30 min
-
-### Task B.2: Wikilink Edge Extractor (no LLM)
-`bin/extract-wikilink-edges.js`: mine `metadata.wikilinks` on Obsidian thoughts, resolve to target
-thoughts by title, insert deterministic edges (`confidence = 1.0`, `edge_source = 'wikilink'`,
-`ON CONFLICT DO NOTHING`). Run against all 3,911 thoughts; log resolution rate.
-**Depends:** B.1 | **Time:** 2 hours | **Files:** `bin/extract-wikilink-edges.js`
-
-### Task B.3: Local Entity Extraction Worker (LLM)
-Build `integrations/entity-extraction-worker/` **from scratch**.
-For each thought, call the local LLM for structured JSON `{entities[], relations[]}`; normalize entity
-names; insert edges with `confidence >= 0.7`, `edge_source = 'prose_extraction'`. Pilot 50 thoughts,
-tune prompt, then run full batch as a background job. Add as a post-ingest step in obsidian-listener.
-**Depends:** B.1, local LLM | **Time:** 3–4 hours
-
-### Task B.4: Graph Traversal in Context Assembler
-Implement the `includeGraph: true` path in `lib/context-assembler.js`: 1-hop expansion from the entities
-in top semantic hits, append graph neighbors with a labeled header, expose via `--graph` in `query-brain.js`.
-**Depends:** A.3, B.2, B.3 | **Time:** 2 hours
+> All tasks done. See HISTORY.md for the full writeup (schema design, chunk-aware
+> traversal fix, extraction results). Summary: 6,946 edges live (2,958 wikilink +
+> 3,988 tag co-mention), `expand_graph_neighbors` RPC, `--graph` flag in `brain query`.
+> No LLM calls used — both edge sources are deterministic.
 
 ---
 
@@ -83,19 +60,20 @@ Include the `match_wiki_pages` RPC. Embedding dim must equal `EMBEDDING_DIMENSIO
 ### Task C.2: Build Wiki Synthesis Engine (local)
 Build `recipes/wiki-synthesis/` and `recipes/entity-wiki/` **from scratch**,
 plus a unified entry point `bin/build-wiki.js` (`--type entity|synthesis`, `--slug <slug>`, `--limit`).
-Entity pages: pull top entities from `graph_edges`, gather related chunks, synthesize + embed via local LLM.
-Pilot the 20 most-connected entities; verify quality in Supabase.
-**Depends:** C.1, B.3 | **Time:** 3–4 hours
+Entity pages: pull the most-connected notes from `graph_edges` (by degree — count of edges per
+canonical thought id), gather their neighbor chunks via `expand_graph_neighbors`, synthesize + embed
+via local LLM. Pilot the 20 most-connected notes; verify quality in Supabase.
+**Depends:** C.1, B.4 ✅ | **Time:** 3–4 hours
 
 ### Task C.3: Post-Ingest Wiki Refresh Hook
 In `obsidian-listener/process-file.js`, after ingest, refresh affected entity pages (max 5/ingest)
 via `bin/build-wiki.js`. Gate behind `WIKI_AUTO_UPDATE=true`. Append entries to `docs/wiki-log.md`.
-**Depends:** C.2, B.3 | **Time:** 1.5 hours
+**Depends:** C.2 | **Time:** 1.5 hours
 
 ### Task C.4: Wiki Lookup in Context Assembler
 Implement `includeWiki: true` in `lib/context-assembler.js` (embed query → `match_wiki_pages`
 + FTS title match), prepend wiki content with a labeled header, expose via `--wiki` in `query-brain.js`.
-**Depends:** A.3, B.4, C.2 | **Time:** 2 hours
+**Depends:** A.3 ✅, B.4 ✅, C.2 | **Time:** 2 hours
 
 ---
 
@@ -146,9 +124,11 @@ entities overlap the query; MCP tools `list_learnings` and `file_answer_to_wiki`
 
 ## Success Metrics
 
-**Phase B complete (graph):**
-- ✓ `graph_edges` deployed; ≥ 5,000 wikilink edges (confidence 1.0); ≥ 10,000 prose edges (≥ 0.7).
-- ✓ `--graph` expands retrieval via 1-hop traversal.
+**Phase B complete (graph):** ✅ DONE
+- ✅ `graph_edges` deployed; 2,958 wikilink edges (confidence 1.0) + 3,988 tag co-mention edges
+  (confidence 0.5–0.9) = 6,946 total. No LLM used — both sources are deterministic
+  (see HISTORY.md for why prose/LLM extraction was dropped in favor of tag co-mention).
+- ✅ `--graph` expands retrieval via 1-hop traversal (`expand_graph_neighbors` RPC, chunk-aware).
 
 **Phase C complete (wiki):**
 - ✓ `wiki_pages` deployed; ≥ 50 entity pages synthesised + embedded.
