@@ -66,9 +66,9 @@ Update `query-brain.js` to log every `--answer` session.
 **Depends:** Phase A | **Time:** 45 min
 
 ### Task D.2: Learnings Accumulator
-`bin/accumulate-learnings.js`: review last N sessions + referenced wiki pages, prompt the local LLM for
-patterns/contradictions/connections/gaps/trends (JSON, confidence ≥ 0.6), insert into `learnings`.
-Flags: `--dry-run`, `--since <date>`.
+`packages/pi-open-brain/extensions/learnings.ts` (or integrated into existing extension):
+Review last N sessions + referenced wiki pages, prompt the local LLM for patterns/contradictions/connections/gaps/trends (JSON, confidence ≥ 0.6), insert into `learnings`.
+Exposed as tool `accumulate_learnings`.
 **Depends:** D.1 | **Time:** 3 hours
 
 ### Task D.3: Expose Learnings (CLI + MCP)
