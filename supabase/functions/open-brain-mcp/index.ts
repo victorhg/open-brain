@@ -317,7 +317,21 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
       const threshold = typeof args.threshold === "number" ? args.threshold : 0.3;
       const limit     = Math.min(typeof args.limit === "number" ? args.limit : 10, 25);
 
-      const embedding = await generateEmbedding(query);
+      // ── Embedding resolution ───────────────────────────────────────────────
+      // Prefer a pre-computed vector supplied by the client (client-side embedding
+      // path). This avoids needing LOCAL_LLM_BASE_URL to be reachable from
+      // Supabase cloud — the pi extension embeds on the user's machine and ships
+      // the vector here; we only need pgvector. Fall back to server-side
+      // generateEmbedding() for local `supabase functions serve` dev only.
+      let embedding: number[];
+      if (
+        Array.isArray(args.embedding) &&
+        (args.embedding as number[]).length === EMBEDDING_DIMENSIONS
+      ) {
+        embedding = args.embedding as number[];
+      } else {
+        embedding = await generateEmbedding(query); // local dev fallback
+      }
 
       const { data, error } = await supabase.rpc("match_thoughts", {
         query_embedding: embedding,
@@ -401,8 +415,15 @@ async function handleTool(name: string, args: Record<string, unknown>): Promise<
 
       const thoughtId: string = upsertResult.id;
 
-      // Generate embedding and store it — same two-step pattern as the watcher
-      const embedding = await generateEmbedding(content);
+      // ── Embedding resolution ───────────────────────────────────────────────
+      // Same policy as search_thoughts: accept a pre-computed vector from the
+      // client so the edge function never needs to reach LOCAL_LLM_BASE_URL.
+      const embedding = (
+        Array.isArray(args.embedding) &&
+        (args.embedding as number[]).length === EMBEDDING_DIMENSIONS
+      )
+        ? args.embedding as number[]
+        : await generateEmbedding(content); // local dev fallback
       const { error: embedErr } = await supabase
         .from("thoughts")
         .update({ embedding })

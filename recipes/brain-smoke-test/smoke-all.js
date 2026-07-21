@@ -692,19 +692,27 @@ const coreChecks = [
   {
     name: "MCP capture_thought tool call",
     fn: async (s) => {
+      // Generate embedding locally so the edge function doesn't need to reach
+      // LOCAL_LLM_BASE_URL from Supabase cloud (which is unreachable there).
+      const embedding = await generateEmbeddingForSmoke(`MCP smoke probe ${SMOKE_TAG}`, s);
+      const captureArgs = { content: `MCP smoke probe ${SMOKE_TAG}`, metadata: { smoke_test: true, tag: SMOKE_TAG } };
+      if (embedding) captureArgs.embedding = embedding;
+
       const body = await fetchJson(MCP_URL, {
         method: "POST",
         headers: MCP_HEADERS,
         body: JSON.stringify({
           jsonrpc: "2.0", id: 2, method: "tools/call",
-          params: {
-            name: "capture_thought",
-            arguments: { content: `MCP smoke probe ${SMOKE_TAG}`, metadata: { smoke_test: true, tag: SMOKE_TAG } },
-          },
+          params: { name: "capture_thought", arguments: captureArgs },
         }),
       }, s);
       if (body?.error) throw new Error(`MCP error: ${body.error.message ?? JSON.stringify(body.error)}`);
       if (!body?.result) throw new Error("no result in MCP response");
+      // Detect isError flag — embedding failure returns a result with isError:true
+      if (body.result?.isError) {
+        const errText = body.result?.content?.[0]?.text ?? "unknown error";
+        throw new Error(`capture_thought failed: ${errText.slice(0, 120)}`);
+      }
       return "captured";
     },
   },
@@ -713,12 +721,21 @@ const coreChecks = [
     fn: async (s) => {
       // Best-effort: some clients debounce embedding; retry once.
       for (const attempt of [1, 2]) {
+        // Pre-compute embedding locally so the edge function only needs pgvector.
+        const embedding = await generateEmbeddingForSmoke(SMOKE_TAG, s);
+        const searchArgs = { query: SMOKE_TAG, limit: 5 };
+        if (embedding) searchArgs.embedding = embedding;
+        else throw new Error(
+          "LOCAL_LLM_BASE_URL or LOCAL_EMBEDDING_MODEL not set — " +
+          "cannot generate embedding for search_thoughts smoke test"
+        );
+
         const body = await fetchJson(MCP_URL, {
           method: "POST",
           headers: MCP_HEADERS,
           body: JSON.stringify({
             jsonrpc: "2.0", id: 3, method: "tools/call",
-            params: { name: "search_thoughts", arguments: { query: SMOKE_TAG, limit: 5 } },
+            params: { name: "search_thoughts", arguments: searchArgs },
           }),
         }, s);
         if (body?.error) throw new Error(`MCP error: ${body.error.message ?? JSON.stringify(body.error)}`);
@@ -878,6 +895,35 @@ function brainToolText(body) {
   return text;
 }
 
+// ---------------------------------------------------------------------------
+// Local embedding helper — mirrors what the pi extension does at runtime.
+// Calls LOCAL_LLM_BASE_URL on the user's machine (reachable here). Returns
+// null if the env var is missing or the call fails — callers degrade gracefully.
+// ---------------------------------------------------------------------------
+
+const LOCAL_LLM_BASE_URL    = env("LOCAL_LLM_BASE_URL").replace(/\/+$/, "");
+const LOCAL_EMBEDDING_MODEL = env("LOCAL_EMBEDDING_MODEL");
+const LOCAL_LLM_API         = env("LOCAL_LLM_API"); // bearer token if required
+
+async function generateEmbeddingForSmoke(text, signal) {
+  if (!LOCAL_LLM_BASE_URL || !LOCAL_EMBEDDING_MODEL) return null;
+  const headers = { "Content-Type": "application/json" };
+  if (LOCAL_LLM_API) headers["Authorization"] = `Bearer ${LOCAL_LLM_API}`;
+  try {
+    const res = await fetch(`${LOCAL_LLM_BASE_URL}/embeddings`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model: LOCAL_EMBEDDING_MODEL, input: text }),
+      signal,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.data?.[0]?.embedding ?? null;
+  } catch {
+    return null;
+  }
+}
+
 const piPackageChecks = [
   {
     name: "BRAIN_MCP_URL configured",
@@ -920,21 +966,20 @@ const piPackageChecks = [
     name: "pi-open-brain: search_thoughts tool responds",
     fn: async (s) => {
       if (!BRAIN_MCP_URL) throw new SkipError("BRAIN_MCP_URL not set");
+      // Generate embedding locally (same path the pi extension uses at runtime).
+      // Skip if LOCAL_LLM_BASE_URL is not configured — can't test without it.
+      const embedding = await generateEmbeddingForSmoke("obsidian notes", s);
+      if (!embedding) throw new SkipError(
+        "LOCAL_LLM_BASE_URL or LOCAL_EMBEDDING_MODEL not set — " +
+        "search_thoughts test skipped (configure local LLM to enable)"
+      );
       const { status, body } = await brainPost({
         jsonrpc: "2.0", id: 1, method: "tools/call",
-        params: { name: "search_thoughts", arguments: { query: "obsidian notes", limit: 3 } },
+        params: { name: "search_thoughts", arguments: { query: "obsidian notes", limit: 3, embedding } },
       }, s);
       if (status !== 200) throw new Error(`HTTP ${status}`);
       const text = brainToolText(body);
-      // search_thoughts requires embedding via LOCAL_LLM_BASE_URL. When the edge
-      // function is deployed to Supabase cloud, it cannot reach 127.0.0.1.
-      // Detect this known condition and skip rather than fail.
-      if (/127\.0\.0\.1|localhost|tcp connect|Connect.*error/i.test(text)) {
-        throw new SkipError(
-          "LOCAL_LLM_BASE_URL (127.0.0.1) unreachable from deployed edge function — " +
-          "expose via Cloudflare Tunnel / Tailscale Funnel to enable search from cloud"
-        );
-      }
+      if (body.result?.isError) throw new Error(`search_thoughts error: ${text.slice(0, 120)}`);
       if (!/found|no matching/i.test(text)) throw new Error(`unexpected: ${text.slice(0, 120)}`);
       return text.split("\n")[0];
     },

@@ -21,6 +21,13 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 
 // ---------------------------------------------------------------------------
+// Timeouts
+// ---------------------------------------------------------------------------
+
+const EMBED_TIMEOUT_MS = 30_000; // local LLM embedding call
+const CALL_TIMEOUT_MS  = 45_000; // edge function HTTP call
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -30,6 +37,52 @@ interface McpResponse {
     isError?: boolean;
   };
   error?: { code?: number; message?: string };
+}
+
+// ---------------------------------------------------------------------------
+// Local embedding — runs on the user's machine, never on Supabase cloud
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a single embedding vector by calling the local LLM directly.
+ * Returns null (gracefully) if LOCAL_LLM_BASE_URL / LOCAL_EMBEDDING_MODEL are
+ * not set, or if the call fails. The caller must handle the null case.
+ *
+ * This is the critical fix for the 127.0.0.1 blocker: the extension runs on
+ * the user's machine where the LLM is reachable, so we embed here and pass
+ * the pre-computed vector to the edge function, which then only needs pgvector.
+ */
+async function generateEmbeddingLocally(text: string): Promise<number[] | null> {
+  const base  = process.env.LOCAL_LLM_BASE_URL?.trim().replace(/\/+$/, "");
+  const model = process.env.LOCAL_EMBEDDING_MODEL?.trim();
+  if (!base || !model) return null;
+
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const apiKey = process.env.LOCAL_LLM_API?.trim();
+  if (apiKey) headers["Authorization"] = `Bearer ${apiKey}`;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EMBED_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${base}/embeddings`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ model, input: text }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      console.warn(`[open-brain] Local embedding failed: HTTP ${res.status}`);
+      return null;
+    }
+    const data = await res.json() as { data: Array<{ embedding: number[] }> };
+    return data.data[0]?.embedding ?? null;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[open-brain] Local embedding error: ${msg}`);
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +105,9 @@ async function mcpCall(
     );
   }
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CALL_TIMEOUT_MS);
+
   let res: Response;
   try {
     res = await fetch(url, {
@@ -66,10 +122,13 @@ async function mcpCall(
         method: "tools/call",
         params: { name: toolName, arguments: args },
       }),
+      signal: controller.signal,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     return `Error: Could not reach Open Brain endpoint — ${msg}`;
+  } finally {
+    clearTimeout(timer);
   }
 
   if (res.status === 401) return "Error: Unauthorized — check your BRAIN_ACCESS_KEY.";
@@ -94,11 +153,21 @@ async function mcpCall(
 export default function (pi: ExtensionAPI) {
   // ── Startup check ──────────────────────────────────────────────────────────
   pi.on("session_start", async (_event, ctx) => {
-    const url = process.env.BRAIN_MCP_URL?.trim();
-    const key = process.env.BRAIN_ACCESS_KEY?.trim();
+    const url   = process.env.BRAIN_MCP_URL?.trim();
+    const key   = process.env.BRAIN_ACCESS_KEY?.trim();
+    const llm   = process.env.LOCAL_LLM_BASE_URL?.trim();
+    const model = process.env.LOCAL_EMBEDDING_MODEL?.trim();
+
     if (!url || !key) {
       ctx.ui.notify(
         "open-brain: BRAIN_MCP_URL or BRAIN_ACCESS_KEY not set — knowledge graph tools are loaded but will return errors until env vars are configured.",
+        "warning"
+      );
+    } else if (!llm || !model) {
+      ctx.ui.notify(
+        "open-brain: LOCAL_LLM_BASE_URL or LOCAL_EMBEDDING_MODEL not set — " +
+        "search_thoughts and capture_thought will fail (embedding is generated locally). " +
+        "Add both to your shell profile. Also set LOCAL_LLM_API if your server requires a bearer token.",
         "warning"
       );
     }
@@ -129,7 +198,15 @@ export default function (pi: ExtensionAPI) {
       ),
     }),
     async execute(_id, params) {
-      const text = await mcpCall("search_thoughts", params as Record<string, unknown>);
+      // Generate embedding locally (on the user's machine where the LLM is reachable).
+      // Pass the vector to the edge function so it only needs to run pgvector — it never
+      // tries to call 127.0.0.1 from Supabase cloud.
+      const args: Record<string, unknown> = { ...params };
+      const embedding = await generateEmbeddingLocally(params.query);
+      if (embedding) {
+        args.embedding = embedding;
+      }
+      const text = await mcpCall("search_thoughts", args);
       return { content: [{ type: "text", text }], details: {} };
     },
   });
@@ -151,7 +228,14 @@ export default function (pi: ExtensionAPI) {
       }),
     }),
     async execute(_id, params) {
-      const text = await mcpCall("capture_thought", params as Record<string, unknown>);
+      // Same client-side embedding path as search_thoughts — embed locally, ship
+      // the vector to the edge function so it skips its own LLM call.
+      const args: Record<string, unknown> = { ...params };
+      const embedding = await generateEmbeddingLocally(params.content);
+      if (embedding) {
+        args.embedding = embedding;
+      }
+      const text = await mcpCall("capture_thought", args);
       return { content: [{ type: "text", text }], details: {} };
     },
   });
