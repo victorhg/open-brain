@@ -14,3 +14,4 @@ recipes/obsidian-vault-import/obsidian-sync-log.json
 node_modules/
 package-lock.json
 
+test_db.cjs
