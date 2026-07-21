@@ -144,6 +144,6 @@ Update `query-brain.js` to log every `--answer` session.
 ## Future Improvements
 - **Schema-over-logic decoupling:** Abstract the "Ingestion Layer" into a formal `lib/thought-writer.js`.
 - **Handling Distributed State (Silent Failures):** Introduce a locking/queueing mechanism via `workflow-status`.
-- **`pi-open-brain` install smoke test (`--smoke-test` flag):** Add a self-contained verification command.
+- [x] **`pi-open-brain` install smoke test (`--smoke-test` flag):** Add a self-contained verification command. (Completed 2026-07-21)
 - **Dimensionality Reduction:** Research Matryoshka embeddings or vector projection to bring embeddings into the 1536/1024 dimension range for index support.
 - **Memory Pruning:** Implement automated staleness detection/archiving for long-term memory maintenance.

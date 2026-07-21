@@ -4,6 +4,9 @@
   "description": "Pi package: native knowledge-graph tools for Open Brain / Obsidian vault",
   "keywords": ["pi-package", "open-brain", "obsidian", "knowledge-graph"],
   "type": "module",
+  "scripts": {
+    "smoke-test": "node test/smoke.js"
+  },
   "pi": {
     "extensions": ["./extensions/index.ts"],
     "skills": ["./skills"]

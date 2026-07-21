@@ -315,6 +315,15 @@ Confirmed `pi-open-brain` was already installed as a local path package
 Verified via `pi-load.js`: 9/9 checks pass — all 4 tools and 3 skills load cleanly,
 zero errors or warnings.
 
+### Task P0.6: Add smoke-test command ✅
+**Completed:** 2026-07-21
+
+- Added `smoke-test` script to `pi-open-brain/package.json`.
+- Implemented `brain smoke-test` CLI command in `open-brain-cli`.
+- Verified connectivity check post-install.
+
+**Files:** `packages/pi-open-brain/package.json`, `packages/open-brain-cli/bin/brain.js`, `packages/open-brain-cli/commands/smoke-test.js`
+
 **P0 phase now fully complete.**
 
 ---
