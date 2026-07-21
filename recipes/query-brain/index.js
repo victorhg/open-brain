@@ -8,13 +8,14 @@
  * and matches them against thoughts in your Supabase database.
  * 
  * Usage:
- *   node bin/query-brain.js "your semantic search query" [--limit 5] [--threshold 0.3] [--answer] [--strict]
+ *   node bin/query-brain.js "your semantic search query" [--limit 5] [--threshold 0.3] [--answer] [--strict] [--graph]
  * 
  * Options:
  *   --limit N         Max search results (default: 5)
  *   --threshold T     Similarity threshold 0-1 (default: 0.3)
  *   --answer          Synthesize a grounded answer using the local Chat LLM
  *   --strict          Abort answer generation if best match similarity < 0.25 (no hallucination on weak context)
+ *   --graph           Expand results with 1-hop graph neighbors (Phase B: wikilinks + tag co-mentions)
  */
 
 import { assembleContext, env, generateEmbedding } from '../../lib/context-assembler.js';
@@ -74,16 +75,17 @@ async function synthesizeAnswer(question, assembledContext) {
 // --- Main Execution ---
 
 export async function runQuery(queryText, options = {}) {
-  const { limit = 5, threshold = 0.3, answer = false, strict = false } = options;
+  const { limit = 5, threshold = 0.3, answer = false, strict = false, graph = false } = options;
 
   console.log(`\n🔍 Searching Open Brain for: "${queryText}"...`);
 
-  let chunks, assembledContext;
+  let chunks, graphNeighbors, assembledContext;
   try {
-    ({ chunks, assembledContext } = await assembleContext({
+    ({ chunks, graphNeighbors, assembledContext } = await assembleContext({
       query:         queryText,
       topK:          limit,
       minSimilarity: threshold,
+      includeGraph:  graph,
     }));
   } catch (err) {
     console.error(`❌ Context assembly failed: ${err.message}`);
@@ -114,6 +116,18 @@ export async function runQuery(queryText, options = {}) {
     }
     console.log('\n' + '═'.repeat(60) + '\n');
   });
+
+  if (graph && graphNeighbors && graphNeighbors.length > 0) {
+    console.log(`🕸️  Graph Expansion — ${graphNeighbors.length} related note(s):\n`);
+    graphNeighbors.forEach((n, idx) => {
+      const title = n.metadata?.title || 'Untitled';
+      const via = n.edge_source === 'wikilink' ? '🔗 wikilink' : '🏷️  shared tag';
+      console.log(`  ${idx + 1}. ${title} (${via}, confidence: ${n.confidence})`);
+    });
+    console.log('\n' + '═'.repeat(60) + '\n');
+  } else if (graph) {
+    console.log('🕸️  Graph Expansion: no connected notes found above the confidence threshold.\n');
+  }
 
   if (answer) {
     if (strict) {

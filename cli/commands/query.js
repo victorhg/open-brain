@@ -10,6 +10,7 @@ cmd
   .option('-t, --threshold <number>', 'Similarity threshold', (val) => parseFloat(val), 0.3)
   .option('--answer', 'Synthesize a grounded answer', false)
   .option('--strict', 'Abort if context is weak', false)
+  .option('--graph', 'Expand results with 1-hop graph neighbors (wikilinks + tag co-mentions)', false)
   .action((query, options) => {
     runQuery(query, options);
   });

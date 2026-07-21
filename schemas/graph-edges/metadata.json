@@ -1,0 +1,18 @@
+{
+  "name": "Graph Edges — Thought-Centric Knowledge Graph",
+  "description": "Adds a graph_edges table connecting thoughts to other thoughts via deterministic wikilinks and shared-tag co-mentions. Enables 1-hop retrieval expansion beyond pure semantic similarity through the expand_graph_neighbors RPC.",
+  "category": "schemas",
+  "author": {
+    "name": "OpenBrain (OB1)",
+    "github": "victorhugogermano"
+  },
+  "version": "1.0.0",
+  "requires": {
+    "open_brain": true
+  },
+  "tags": ["schema", "graph", "wikilinks", "retrieval", "knowledge-graph"],
+  "difficulty": "beginner",
+  "estimated_time": "15 minutes",
+  "created": "2026-07-18",
+  "updated": "2026-07-18"
+}
